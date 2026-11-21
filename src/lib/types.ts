@@ -195,6 +195,12 @@ export interface AppState {
    *  event bus (Kafka / SNS / EventBridge) plugs in. Optional so older
    *  saved states still load. */
   events?: AppEvent[];
+  /** Bring-your-own-dataset (see lib/dataset.ts): which dataset the
+   *  working caseload came from. Absent = the built-in seed. An uploaded
+   *  dataset lives in browser state only — it never touches the seed
+   *  files on disk and is never sent to a server. */
+  datasetName?: string;
+  datasetSource?: 'builtin' | 'uploaded';
   seededAt: string;
 }
 

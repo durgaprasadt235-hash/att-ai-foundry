@@ -363,6 +363,40 @@ engineering team required for day-to-day operation.
 6. Every line of the Principal AI-Native Software Engineer job
    description is covered — see `docs/JD_COVERAGE.md` for the
    bullet-by-bullet mapping (file + how to verify each one).
+7. **First call with a director's own data:** the director's team brings
+   an anonymised sample file (JSON or CSVs), uploads it in the Data view,
+   reads the validation report, and runs the agent on their own records
+   in minutes — no live connection, nothing leaving the browser. The
+   live connection is a separate, days-to-weeks step (§11, N1), never
+   promised for the first call. See `docs/DATASET_GUIDE.md`.
+
+## 18. First call — bring your own dataset (no live connection)
+
+A director will not connect live company data into someone else's working
+environment on a first call, and wiring a live connection takes days to
+weeks (access, security review, mapping, testing). The first call
+therefore runs on a sample file:
+
+- **Upload:** Data view → select a `.json` file (same shape as
+  `test-data.json`) or one `.csv` per table (`customers.csv`,
+  `ledger.csv`, `usage.csv`, `cases.csv`, `tickets.csv` optional).
+- **Validate:** rules D1–D12 (`src/lib/dataset.ts`, mirrored in
+  `server/validate_dataset.py`): required tables, unique ids, enums,
+  references resolving, balances reconciling to the cent. Errors block
+  the load with the exact record and rule; warnings (duplicate charges,
+  unmatched case amounts) are shown, not hidden; auto-filled fields are
+  listed, never silent.
+- **Test:** the loaded dataset replaces the working caseload in browser
+  state (localStorage); Dashboard, Cases, Medallion and Pipelines all
+  recompute from it. **Reset to original dataset** restores the built-in
+  seed. The file never leaves the browser and never touches the seed
+  files on disk.
+- **Prepare:** `docs/DATASET_GUIDE.md` — what to export, how to
+  anonymise names/phones/emails while keeping real amounts and
+  relationships, what a good sample looks like (10–20 customers, a few
+  known duplicates, 2–3 cases per journey), and the honest timeline to a
+  live connection (sample in minutes → access in days to weeks →
+  `att` adapter in days once access exists).
 
 ---
 

@@ -84,6 +84,19 @@ These are the only three connections between this prototype and AT&T's
 real systems. Each is built, each fails honestly until connected, and each
 is visible in the Dashboard's Production readiness panel.
 
+**Before any of them — the first call needs none of this.** A director
+does not connect live company data on a first call, and a live connection
+takes days to weeks. The first call runs on a sample file instead: the
+director's team brings an anonymised `.json` (or one `.csv` per table),
+uploads it in the app's **Data** view, reads the validation report, and
+tests the agent on their own records in minutes. Full instructions are in
+`docs/DATASET_GUIDE.md`; the validator is `src/lib/dataset.ts` in the
+browser and `server/validate_dataset.py` on the command line
+(`python3 server/validate_dataset.py your-sample.json`). Nothing leaves
+the browser, and **Reset to original dataset** restores the built-in
+seed. The sample is how the director decides whether steps 1–3 below
+are worth doing — it is not a shortcut past them.
+
 ### Step 1 — Live AT&T data (`att` datasource mode)
 
 1. The fulfilment team exposes five read endpoints on `ATT_API_BASE_URL`,
@@ -160,3 +173,4 @@ is visible in the Dashboard's Production readiness panel.
 | `docker compose up` fails on `web` | API not healthy yet | `web` waits for `api` health (`/health`); check `docker compose logs api`. |
 | Startup exits with "Configuration error" | A REQUIRED var is missing for the selected mode | Read the message — it names the missing vars. Demo mode (`seed`, auth off) needs none. |
 | 429 from the API | Demo-grade rate-limit guard tripped | Wait for `Retry-After` seconds. Production rate limiting belongs at the edge. |
+| Dataset upload rejected in the Data view | Validation errors (duplicate id, unknown customer, balance mismatch) | Read the report — it names the exact record and rule (D1–D12). Fix the file and upload again; nothing was loaded. Check the file first with `python3 server/validate_dataset.py your-sample.json`. |

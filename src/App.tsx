@@ -10,6 +10,8 @@ import { stateTraceForRun } from './lib/agent';
 import { newAppEvent } from './lib/events';
 import type { AppEvent } from './lib/events';
 import { redactPII } from './lib/redact';
+import DataView from './components/DataView';
+import { datasetToState, type DatasetTables } from './lib/dataset';
 import CreateCaseForm from './components/CreateCaseForm';
 
 /** Shape of GET /api/health (mirrors api/health.ts + server/app.py). The
@@ -29,9 +31,10 @@ interface HealthStatus {
   demoData: string;
 }
 
-type View = 'dashboard' | 'customers' | 'cases' | 'pipelines' | 'medallion' | 'rag' | 'stair' | 'evals' | 'observability';
+type View = 'dashboard' | 'data' | 'customers' | 'cases' | 'pipelines' | 'medallion' | 'rag' | 'stair' | 'evals' | 'observability';
 const NAV: { id: View; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'data', label: 'Data' },
   { id: 'customers', label: 'Customers' },
   { id: 'cases', label: 'Cases' },
   { id: 'pipelines', label: 'Pipelines' },
@@ -336,6 +339,24 @@ export default function App() {
     );
   }
 
+  // ---------- Bring your own dataset (see lib/dataset.ts) ----------
+  // Loading a validated dataset replaces the working caseload in browser
+  // state; the built-in seed files on disk are never touched. Reset
+  // restores the built-in seed.
+  const loadDataset = (tables: DatasetTables, name: string) => {
+    const next = datasetToState(tables, name);
+    stateRef.current = next;
+    setState(next);
+    setNotice(`Loaded dataset "${name}": ${next.customers.length} customers, ${next.cases.length} cases. Dashboard, Cases, Medallion and Pipelines now run on your data.`);
+    setView('cases');
+  };
+  const resetDataset = () => {
+    const fresh = resetState();
+    stateRef.current = fresh;
+    setState(fresh);
+    setNotice('Reset to the original built-in dataset.');
+  };
+
   return (
     <div>
       <header className="top">
@@ -350,6 +371,7 @@ export default function App() {
       <div className="wrap">
         {notice && <div className="panel mt" role="status">{notice}</div>}
         {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShowCases={() => setView('cases')} />}
+        {view === 'data' && <DataView state={state} onLoadDataset={loadDataset} onReset={resetDataset} audit={audit} />}
         {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} />}
         {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} onCreateAndRun={createCaseAndRun} />}
         {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} emit={emit} />}

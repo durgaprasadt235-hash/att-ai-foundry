@@ -91,6 +91,39 @@ notification appear, and the ROI numbers move. Every case is a real record
 you just created — there is no canned demo case. The 12 seeded cases in the
 Cases view are the existing caseload, each runnable from its own row.
 
+## Bring your own dataset — the first call
+
+A director will not connect live company data into someone else's working
+environment on a first call, and a live connection takes days to weeks
+anyway. So the first call runs on a **sample file the director's team
+brings**: open the **Data** view, upload a `.json` file (same shape as
+`test-data.json`) or one `.csv` per table (`customers.csv`, `ledger.csv`,
+`usage.csv`, `cases.csv`, `tickets.csv` optional), read the validation
+report, and test the agent on *your* records in minutes.
+
+- **Validated before it loads:** record counts, duplicate ids, unknown
+  customer references, and balances that don't reconcile to the cent are
+  all reported; an invalid file is rejected with the exact errors and
+  nothing is half-loaded. Warnings (duplicate charges found, a case
+  amount with no matching ledger entry) are shown, not hidden.
+- **Private by design:** files are read in the browser only — nothing is
+  uploaded to any server, the dataset never leaves the device, and the
+  built-in seed files are never touched. **Reset to original dataset**
+  restores the built-in seed at any time.
+- **Templates included:** download `dataset-template.json` or the CSV
+  templates from the Data view; `docs/DATASET_GUIDE.md` tells the
+  director's team how to export and anonymise a sample (10–20 customers,
+  a few known duplicates, 2–3 cases per journey) and what happens next.
+- **The same rules on the command line:** `python3 server/validate_dataset.py
+  your-sample.json` (or `--csv-dir`) implements the same D1–D12 rules as
+  the browser validator (`src/lib/dataset.ts`).
+
+**The honest timeline:** sample file on the first call (minutes) →
+security review and access (days to weeks, fulfilment team) → live
+adapter via `DATASOURCE=att` (days once access exists, no agent code
+changes). The sample is how the director decides whether the live
+connection is worth doing at all — it is not a shortcut past it.
+
 ## Medallion architecture — Bronze → Silver → Gold (one operator)
 
 **The operator story:** a single person runs this whole data platform.
@@ -486,9 +519,13 @@ src/lib/auth.ts        auth boundary — Entra ID gate, disabled by default, hon
 src/lib/redact.ts      PII redaction — masks phone/email in logs, traces, audit, events
 src/lib/events.ts      event feed types — the Kafka/SNS seam
 src/lib/api-utils.ts   API helpers — JSON errors + demo-grade rate-limit guard
-src/App.tsx            Dashboard (Production readiness panel), Customers, Cases, Pipelines, Medallion, RAG, STAIR, Evals (release gate), Observability (audit + event feed)
+src/lib/dataset.ts     bring-your-own-dataset: JSON + CSV validation (rules D1–D12), CSV parser, templates, datasetToState
+src/components/DataView.tsx  Data view: upload, validation report, templates, reset to original dataset
+src/lib/case-intake.ts   case intake — create a real case (no canned demo case)
+src/App.tsx            Dashboard (Production readiness panel), Data, Customers, Cases, Pipelines, Medallion, RAG, STAIR, Evals (release gate), Observability (audit + event feed)
 api/                   Vercel serverless: health, run-case, rag, stair
 docs/OPERATOR_RUNBOOK.md  1-person operations: daily loop, common failures + Copilot prompts, never-do list
+docs/DATASET_GUIDE.md  bring-your-own-dataset guide for the director's team: export, anonymise, first-call sample, honest live-connection timeline
 docs/DEPLOYMENT.md     deployment runbook: Vercel import, env vars, redeploy, smoke checks, Docker, fulfilment onboarding
 docs/JD_COVERAGE.md    every JD bullet → file + how to verify it
 server/engine.py       Python port of the agent engine (live_llm mode included) + execute_approved
@@ -504,7 +541,8 @@ server/redact.py       PII redaction (Python mirror)
 server/events.py       event feed (Python mirror) — the Kafka/SNS seam
 server/observability.py  structured JSON logging, trace ids, metrics
 server/app.py          FastAPI reference backend (plan, execute, evals, release gate, medallion, metrics, events, tools)
-server/test_*.py       pytest: engine, STAIR, Groq (+ breaker), Medallion (+ bounded batches), config, datasource, auth, agent, tool contracts, redact, events, observability, execute/idempotency, release gate, health
+server/validate_dataset.py  BYOD validator (Python mirror of D1–D12) + CLI: python3 server/validate_dataset.py file.json [--csv-dir DIR]
+server/test_*.py       pytest: engine, STAIR, Groq (+ breaker), Medallion (+ bounded batches), config, datasource, auth, agent, tool contracts, redact, events, observability, execute/idempotency, release gate, health, validate_dataset
 server/seed.json       seed state shared with the Python backend
 server/Dockerfile      backend image (python:3.12-slim + uvicorn)
 docker-compose.yml     whole stack: api :8000, web :4173, db (profile with-db, reserved)
