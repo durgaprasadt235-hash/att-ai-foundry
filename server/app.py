@@ -24,7 +24,7 @@ from engine import (
     plan_run,
     run_eval_suite,
     eval_score,
-    validate_pipeline_batch,
+    validate_pipeline,
 )
 from stair_retriever import answer as stair_answer, load_trees, measure_eval
 
@@ -53,6 +53,9 @@ class PlanRequest(BaseModel):
     # is never accepted in the request body. Unavailable Groq falls back
     # to the deterministic engine and the trace says so.
     live_llm: bool = False
+    # Which pipeline to validate (PIPE-01/02/03). The endpoint validates
+    # only that pipeline's own source; "" fails as an unknown pipeline.
+    pipeline_id: str = ""
 
 
 @app.get("/health")
@@ -93,7 +96,10 @@ def rag_search(req: RagRequest) -> dict:
 
 @app.post("/pipelines/validate")
 def pipeline_validate(req: PlanRequest) -> dict:
-    return validate_pipeline_batch(req.state)
+    # Per-pipeline: the caller names the pipeline; only its own source is
+    # validated. An unknown/absent id fails honestly instead of silently
+    # validating the whole batch (the old behaviour).
+    return validate_pipeline(req.pipeline_id, req.state)
 
 
 @app.post("/evals/run")

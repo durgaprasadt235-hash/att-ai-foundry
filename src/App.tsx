@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentRun, AppState, Case, Customer, PolicyDoc } from './lib/types';
 import { AGENT_COST_USD, EVAL_GATE_PCT, MANUAL_COST_USD, MANUAL_MINUTES, OUTAGE_CREDIT_USD, RETENTION_CREDIT_USD } from './lib/types';
-import { applyCredit, creditAlreadyApplied, customer360, dashboard, evalScore, findDuplicate, groundedAnswer, planRun, runEvalSuite, validatePipelineBatch } from './lib/engine';
+import { applyCredit, creditAlreadyApplied, customer360, dashboard, evalScore, findDuplicate, groundedAnswer, planRun, runEvalSuite, validatePipeline } from './lib/engine';
 import { fmtMin, fmtMs, loadState, money, resetState, saveState, uid } from './lib/store';
 import { autoTocFromDoc, measureChunkRagEval, measureStairEval, stairAnswer, stairRetrieve } from './lib/stair';
 
@@ -472,7 +472,7 @@ function PipelinesView({ state, mutate, audit }: { state: AppState; mutate: (fn:
     setRunningId(id);
     const t0 = performance.now();
     await sleep(500);
-    const result = validatePipelineBatch(stateRefOf(state));
+    const result = validatePipeline(id, stateRefOf(state));
     const ms = Math.round(performance.now() - t0);
     const status = result.failed === 0 ? 'succeeded' : 'succeeded_with_exceptions';
     mutate((s) => ({

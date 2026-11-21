@@ -25,7 +25,7 @@ from engine import (  # noqa: E402
     grounded_answer,
     plan_run,
     run_eval_suite,
-    validate_pipeline_batch,
+    validate_pipeline,
 )
 
 
@@ -55,7 +55,7 @@ def make_state(**overrides):
             {"id": "LED-05", "customerId": "CUST-1003", "invoice": "INV-2110", "date": "2026-11-11",
              "service": "Unlimited Premium — monthly plan", "amount": 87.40, "kind": "charge", "status": "posted"},
         ],
-        "usage": [{"id": "USE-01", "customerId": "CUST-1001", "month": "2026-11", "dataGb": 42.1}],
+        "usage": [{"id": "USE-01", "customerId": "CUST-1001", "month": "2026-11", "dataGb": 42.1, "minutes": 120, "sms": 10}],
         "tickets": [],
         "cases": [
             {"id": "CASE-1001", "customerId": "CUST-1001", "type": "duplicate_charge",
@@ -159,12 +159,54 @@ def test_idempotency_credit_key():
     assert credit_already_applied(state, "CASE-1001") is True
 
 
-def test_pipeline_batch_counts_exceptions():
-    result = validate_pipeline_batch(make_state())
-    assert result["processed"] == 5 + 5 + 1
-    assert result["failed"] == 2  # duplicate charge + suspended account with balance
-    assert any("Duplicate charge" in e for e in result["exceptions"])
-    assert any("Suspended account" in e for e in result["exceptions"])
+def test_pipeline_counts_are_per_pipeline_not_whole_batch():
+    state = make_state()
+    p1 = validate_pipeline("PIPE-01", state)
+    assert p1["processed"] == 5  # customers only
+    assert p1["failed"] == 1  # suspended CUST-1005 with balance
+    assert any("Suspended account" in e for e in p1["exceptions"])
+    assert not any("Duplicate charge" in e for e in p1["exceptions"])
+    p2 = validate_pipeline("PIPE-02", state)
+    assert p2["processed"] == 5  # ledger only
+    assert p2["failed"] == 1  # duplicate CUST-1001 INV-2039 + INV-2041
+    assert any("Duplicate charge: CUST-1001 INV-2039 + INV-2041 ($87.40)" in e for e in p2["exceptions"])
+    assert not any("Suspended account" in e for e in p2["exceptions"])
+    p3 = validate_pipeline("PIPE-03", state)
+    assert p3["processed"] == 1  # usage only
+    assert p3["failed"] == 0  # the one usage record is clean
+    assert p3["exceptions"] == []
+    assert validate_pipeline("PIPE-99", state)["failed"] == 1
+
+
+def test_pipeline_02_flags_unknown_customer_zero_amount_and_all_duplicates():
+    state = make_state()
+    state["ledger"].append({"id": "LED-99", "customerId": "CUST-9999", "invoice": "INV-9999",
+                            "date": "2026-11-15", "service": "Plan", "amount": 10.00,
+                            "kind": "charge", "status": "posted"})
+    state["ledger"].append({"id": "LED-98", "customerId": "CUST-1003", "invoice": "INV-9998",
+                            "date": "2026-11-15", "service": "Plan", "amount": 0,
+                            "kind": "charge", "status": "posted"})
+    result = validate_pipeline("PIPE-02", state)
+    assert result["processed"] == 7
+    assert result["failed"] == 3  # duplicate + unknown customer + zero amount
+    assert any("unknown customer CUST-9999" in e for e in result["exceptions"])
+    assert any("zero amount" in e for e in result["exceptions"])
+
+
+def test_pipeline_03_flags_unknown_customer_negative_and_zero_usage_on_active():
+    state = make_state()
+    state["usage"] = [
+        {"id": "USE-01", "customerId": "CUST-1001", "month": "2026-11", "dataGb": 42.1, "minutes": 120, "sms": 10},
+        {"id": "USE-02", "customerId": "CUST-9999", "month": "2026-11", "dataGb": 1.0, "minutes": 5, "sms": 0},
+        {"id": "USE-03", "customerId": "CUST-1003", "month": "2026-11", "dataGb": -1.0, "minutes": 5, "sms": 0},
+        {"id": "USE-04", "customerId": "CUST-1002", "month": "2026-11", "dataGb": 0, "minutes": 0, "sms": 0},
+    ]
+    result = validate_pipeline("PIPE-03", state)
+    assert result["processed"] == 4
+    assert result["failed"] == 3  # unknown customer + negative + zero usage on active CUST-1002
+    assert any("unknown customer CUST-9999" in e for e in result["exceptions"])
+    assert any("negative value" in e for e in result["exceptions"])
+    assert any("zero usage" in e for e in result["exceptions"])
 
 
 def test_eval_suite_passes_and_gate_is_85():

@@ -9,15 +9,10 @@ import type {
 import { stairRetrieve } from './stair';
 import type { StairLeaf } from './types';
 import { DEFAULT_TARGET_PLAN, EVAL_GATE_PCT, GOODWILL_APPROVAL_THRESHOLD_USD, OUTAGE_CREDIT_USD, OUTAGE_MIN_HOURS, PLAN_PRICES, RETENTION_CREDIT_USD } from './types';
-
-export const STOPWORDS = new Set(
-  'a an the is are was were what how why when where which who whom this that these those it its of for to in on at by with from as and or not no do does did can could should would i me my we you your he she they them his her their our'.split(' '),
-);
-
-export function tokenize(text: string): string[] {
-  // Light stemming so "credits" matches "credit" and "charges" matches "charge".
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOPWORDS.has(w)).map((w) => w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w);
-}
+// tokenize/STOPWORDS live in ./text.ts (not here) so stair.ts can use them
+// without importing this module — see text.ts for why the cycle had to go.
+export { STOPWORDS, tokenize } from './text';
+import { tokenize } from './text';
 
 export interface RagHit { doc: PolicyDoc; score: number; matched: string[] }
 
@@ -394,20 +389,78 @@ export function applyCredit(state: AppState, c: Case, run: AgentRun, dup: Duplic
   return { entry, customer };
 }
 
-/** ETL validation over the seeded batch. Deterministic: same input, same counts. */
-export function validatePipelineBatch(state: AppState): { processed: number; failed: number; exceptions: string[] } {
-  const exceptions: string[] = [];
-  let failed = 0;
-  const dup = findDuplicate(state.ledger, 'CUST-1001');
-  if (dup) { exceptions.push(`Duplicate charge: CUST-1001 ${dup.original.invoice} + ${dup.duplicate.invoice} ($${dup.duplicate.amount.toFixed(2)})`); failed += 1; }
-  const suspended = state.customers.filter((c) => c.status === 'suspended' && c.balance > 0);
-  for (const c of suspended) { exceptions.push(`Suspended account with balance: ${c.id} ${c.name} ($${c.balance.toFixed(2)})`); failed += 1; }
-  for (const e of state.ledger) {
-    if (!state.customers.some((c) => c.id === e.customerId)) { exceptions.push(`Ledger ${e.id} references unknown customer ${e.customerId}`); failed += 1; }
-    if (e.amount === 0) { exceptions.push(`Ledger ${e.id} has a zero amount`); failed += 1; }
+export interface PipelineValidation { processed: number; failed: number; exceptions: string[] }
+
+/** Per-pipeline ETL validation. Each pipeline validates ONLY its own
+ *  source — a run's counts and exceptions are that pipeline's, never the
+ *  whole batch's. (Before this fix every pipeline ran the same whole-batch
+ *  check, so PIPE-01/02/03 all reported identical "107 processed, 3 failed".)
+ *  Deterministic: same input, same counts. */
+export function validatePipeline(pipelineId: string, state: AppState): PipelineValidation {
+  if (pipelineId === 'PIPE-01') {
+    // Customer 360 ingest — customers only.
+    const exceptions: string[] = [];
+    let failed = 0;
+    for (const c of state.customers) {
+      if (c.status === 'suspended' && c.balance > 0) {
+        exceptions.push(`Suspended account with balance: ${c.id} ${c.name} ($${c.balance.toFixed(2)})`);
+        failed += 1;
+      }
+    }
+    return { processed: state.customers.length, failed, exceptions };
   }
-  const processed = state.customers.length + state.ledger.length + state.usage.length;
-  return { processed, failed, exceptions };
+  if (pipelineId === 'PIPE-02') {
+    // Billing ledger reconcile — ledger only.
+    const exceptions: string[] = [];
+    let failed = 0;
+    for (const e of state.ledger) {
+      if (!state.customers.some((c) => c.id === e.customerId)) {
+        exceptions.push(`Ledger ${e.id} references unknown customer ${e.customerId}`);
+        failed += 1;
+      }
+      if (e.amount === 0) {
+        exceptions.push(`Ledger ${e.id} has a zero amount`);
+        failed += 1;
+      }
+    }
+    for (const customerId of [...new Set(state.ledger.map((e) => e.customerId))]) {
+      const dup = findDuplicate(state.ledger, customerId);
+      if (dup) {
+        exceptions.push(`Duplicate charge: ${customerId} ${dup.original.invoice} + ${dup.duplicate.invoice} ($${dup.duplicate.amount.toFixed(2)})`);
+        failed += 1;
+      }
+    }
+    return { processed: state.ledger.length, failed, exceptions };
+  }
+  if (pipelineId === 'PIPE-03') {
+    // Usage daily rollup — usage only.
+    const exceptions: string[] = [];
+    let failed = 0;
+    for (const u of state.usage) {
+      const customer = state.customers.find((c) => c.id === u.customerId);
+      if (!customer) {
+        exceptions.push(`Usage ${u.id} references unknown customer ${u.customerId}`);
+        failed += 1;
+        continue;
+      }
+      if ((u.dataGb ?? 0) < 0 || (u.minutes ?? 0) < 0 || (u.sms ?? 0) < 0) {
+        exceptions.push(`Usage ${u.id} has a negative value (data ${u.dataGb} GB, ${u.minutes} min, ${u.sms} sms)`);
+        failed += 1;
+        continue;
+      }
+      if (!u.month) {
+        exceptions.push(`Usage ${u.id} is missing a month`);
+        failed += 1;
+        continue;
+      }
+      if (customer.status === 'active' && (u.dataGb ?? 0) === 0 && (u.minutes ?? 0) === 0 && (u.sms ?? 0) === 0) {
+        exceptions.push(`Usage ${u.id}: active account ${u.customerId} recorded zero usage for ${u.month}`);
+        failed += 1;
+      }
+    }
+    return { processed: state.usage.length, failed, exceptions };
+  }
+  return { processed: 0, failed: 1, exceptions: [`Unknown pipeline ${pipelineId}`] };
 }
 
 /** Evaluation suite — 8 checks, 85% release gate. Runs against live state, so

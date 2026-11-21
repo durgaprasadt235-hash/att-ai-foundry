@@ -24,7 +24,7 @@
 //    is computed live in the UI (see measureStairEval) — that is the number
 //    that matters for this demo.
 import type { PolicyDoc, StairLeaf, StairTree } from './types';
-import { tokenize } from './engine';
+import { tokenize } from './text'; // text.ts, not engine.ts — importing engine here created a cycle (see text.ts)
 
 export interface StairHit {
   leaf: StairLeaf;

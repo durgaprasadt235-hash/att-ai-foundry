@@ -486,31 +486,70 @@ def credit_already_applied(state: dict, case_id: str) -> bool:
     return any(e["id"] == f"LED-CR-{case_id}" for e in state["ledger"])
 
 
-def validate_pipeline_batch(state: dict) -> dict:
-    exceptions: list[str] = []
-    failed = 0
-    dup = find_duplicate(state["ledger"], "CUST-1001")
-    if dup:
-        exceptions.append(
-            f"Duplicate charge: CUST-1001 {dup['original']['invoice']} + "
-            f"{dup['duplicate']['invoice']} (${dup['duplicate']['amount']:.2f})"
-        )
-        failed += 1
-    for c in state["customers"]:
-        if c["status"] == "suspended" and c["balance"] > 0:
-            exceptions.append(
-                f"Suspended account with balance: {c['id']} {c['name']} (${c['balance']:.2f})"
-            )
-            failed += 1
-    for e in state["ledger"]:
-        if not any(c["id"] == e["customerId"] for c in state["customers"]):
-            exceptions.append(f"Ledger {e['id']} references unknown customer {e['customerId']}")
-            failed += 1
-        if e["amount"] == 0:
-            exceptions.append(f"Ledger {e['id']} has a zero amount")
-            failed += 1
-    processed = len(state["customers"]) + len(state["ledger"]) + len(state["usage"])
-    return {"processed": processed, "failed": failed, "exceptions": exceptions}
+def validate_pipeline(pipeline_id: str, state: dict) -> dict:
+    """Per-pipeline ETL validation. Each pipeline validates ONLY its own
+    source — a run's counts and exceptions are that pipeline's, never the
+    whole batch's. Mirrors src/lib/engine.ts validatePipeline."""
+    if pipeline_id == "PIPE-01":
+        # Customer 360 ingest — customers only.
+        exceptions: list[str] = []
+        failed = 0
+        for c in state["customers"]:
+            if c["status"] == "suspended" and c["balance"] > 0:
+                exceptions.append(
+                    f"Suspended account with balance: {c['id']} {c['name']} (${c['balance']:.2f})"
+                )
+                failed += 1
+        return {"processed": len(state["customers"]), "failed": failed, "exceptions": exceptions}
+    if pipeline_id == "PIPE-02":
+        # Billing ledger reconcile — ledger only.
+        exceptions = []
+        failed = 0
+        for e in state["ledger"]:
+            if not any(c["id"] == e["customerId"] for c in state["customers"]):
+                exceptions.append(f"Ledger {e['id']} references unknown customer {e['customerId']}")
+                failed += 1
+            if e["amount"] == 0:
+                exceptions.append(f"Ledger {e['id']} has a zero amount")
+                failed += 1
+        for customer_id in sorted({e["customerId"] for e in state["ledger"]}):
+            dup = find_duplicate(state["ledger"], customer_id)
+            if dup:
+                exceptions.append(
+                    f"Duplicate charge: {customer_id} {dup['original']['invoice']} + "
+                    f"{dup['duplicate']['invoice']} (${dup['duplicate']['amount']:.2f})"
+                )
+                failed += 1
+        return {"processed": len(state["ledger"]), "failed": failed, "exceptions": exceptions}
+    if pipeline_id == "PIPE-03":
+        # Usage daily rollup — usage only.
+        exceptions = []
+        failed = 0
+        for u in state["usage"]:
+            customer = next((c for c in state["customers"] if c["id"] == u["customerId"]), None)
+            if customer is None:
+                exceptions.append(f"Usage {u['id']} references unknown customer {u['customerId']}")
+                failed += 1
+                continue
+            if (u.get("dataGb") or 0) < 0 or (u.get("minutes") or 0) < 0 or (u.get("sms") or 0) < 0:
+                exceptions.append(
+                    f"Usage {u['id']} has a negative value (data {u.get('dataGb')} GB, "
+                    f"{u.get('minutes')} min, {u.get('sms')} sms)"
+                )
+                failed += 1
+                continue
+            if not u.get("month"):
+                exceptions.append(f"Usage {u['id']} is missing a month")
+                failed += 1
+                continue
+            if (customer["status"] == "active" and (u.get("dataGb") or 0) == 0
+                    and (u.get("minutes") or 0) == 0 and (u.get("sms") or 0) == 0):
+                exceptions.append(
+                    f"Usage {u['id']}: active account {u['customerId']} recorded zero usage for {u.get('month')}"
+                )
+                failed += 1
+        return {"processed": len(state["usage"]), "failed": failed, "exceptions": exceptions}
+    return {"processed": 0, "failed": 1, "exceptions": [f"Unknown pipeline {pipeline_id}"]}
 
 
 def run_eval_suite(state: dict) -> list[dict]:
