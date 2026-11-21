@@ -33,18 +33,13 @@ interface HealthStatus {
   demoData: string;
 }
 
-type View = 'dashboard' | 'data' | 'customers' | 'cases' | 'pipelines' | 'medallion' | 'rag' | 'stair' | 'evals' | 'observability';
+type View = 'dashboard' | 'data' | 'customers' | 'cases' | 'system';
 const NAV: { id: View; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'data', label: 'Data' },
   { id: 'customers', label: 'Customers' },
   { id: 'cases', label: 'Cases' },
-  { id: 'pipelines', label: 'Pipelines' },
-  { id: 'medallion', label: 'Medallion' },
-  { id: 'rag', label: 'RAG Knowledge' },
-  { id: 'stair', label: 'STAIR' },
-  { id: 'evals', label: 'Evaluations' },
-  { id: 'observability', label: 'Observability' },
+  { id: 'system', label: 'System' },
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -388,7 +383,7 @@ export default function App() {
   const loadDataset = (next: AppState, name: string) => {
     stateRef.current = next;
     setState(next);
-    setNotice(`Loaded dataset "${name}": ${next.customers.length} customers, ${next.cases.length} cases. Dashboard, Cases, Medallion and Pipelines now run on your data.`);
+    setNotice(`Loaded dataset "${name}": ${next.customers.length} customers, ${next.cases.length} cases. Dashboard, Cases and Search now run on your data.`);
     setView('cases');
   };
   const resetDataset = () => {
@@ -411,16 +406,11 @@ export default function App() {
       </nav>
       <div className="wrap">
         {notice && <div className="panel mt" role="status">{notice}</div>}
-        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShowCases={() => setView('cases')} onShow360={() => setView('customers')} confirmed={confirmed} onConfirmCustomer={confirmCustomer} onClearConfirmation={clearConfirmation} audit={audit} />}
+        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShow360={() => setView('customers')} confirmed={confirmed} onConfirmCustomer={confirmCustomer} onClearConfirmation={clearConfirmation} audit={audit} />}
         {view === 'data' && <DataView state={state} onLoadDataset={loadDataset} onReset={resetDataset} audit={audit} />}
         {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} onRun={runAgent} onCreateAndRun={createCaseAndRun} confirmed={confirmed} onConfirmCustomer={confirmCustomer} onClearConfirmation={clearConfirmation} />}
         {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} onCreateAndRun={createCaseAndRun} />}
-        {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} emit={emit} />}
-        {view === 'medallion' && <MedallionView state={state} audit={audit} />}
-        {view === 'rag' && <RagView state={state} mutate={mutate} audit={audit} />}
-        {view === 'stair' && <StairView state={state} />}
-        {view === 'evals' && <EvalsView state={state} mutate={mutate} audit={audit} emit={emit} />}
-        {view === 'observability' && <ObservabilityView state={state} onReset={() => { const fresh = resetState(); setState(fresh); stateRef.current = fresh; setNotice('Demo data reset to the seeded state.'); }} />}
+        {view === 'system' && <SystemView state={state} mutate={mutate} audit={audit} emit={emit} onReset={() => { const fresh = resetState(); setState(fresh); stateRef.current = fresh; setNotice('Demo data reset to the seeded state.'); }} />}
         <footer>
           Honest about what is live: frontend ↔ serverless API ↔ agent engine ↔ data store are live-connected inside this prototype, analytics are computed live from real runs, LangGraph-style code is real Python in server/, and RAG/STAIR retrieval is real over seeded policy docs. Live Groq (openai/gpt-oss-120b) runs only when GROQ_API_KEY is set — otherwise the agent is deterministic and says so. There is no real AT&amp;T internal API, and all demo data is synthetic. Every step is traced to a ledger record or a cited policy section. Manual baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case (POL-005). Agent cost {money(AGENT_COST_USD)} per run is a stated demo assumption, not a measured cloud bill.
         </footer>
@@ -430,53 +420,32 @@ export default function App() {
 }
 
 /* ---------------- Dashboard ---------------- */
-function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, onShowCases, onShow360, confirmed, onConfirmCustomer, onClearConfirmation, audit }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; onShowCases: () => void; onShow360: () => void; confirmed: CustomerConfirmation | null; onConfirmCustomer: (customer: Customer, method: VerificationMethod) => void; onClearConfirmation: () => void; audit: (actor: 'human', action: string, detail: string) => void }) {
+function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, onShow360, confirmed, onConfirmCustomer, onClearConfirmation, audit }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; onShow360: () => void; confirmed: CustomerConfirmation | null; onConfirmCustomer: (customer: Customer, method: VerificationMethod) => void; onClearConfirmation: () => void; audit: (actor: 'human', action: string, detail: string) => void }) {
   return (
     <section>
       <h1>Five journeys, one agent — end to end</h1>
-      <p className="muted">Billing dispute, service provisioning, network outage triage, plan upgrade, and retention — the same agent retrieves Customer 360, grounds itself in policy with STAIR, validates, and proposes. Then it stops for human approval. Nothing is credited, activated, or changed until a person approves it.</p>
       <ConfirmCustomerForm key={confirmed ? confirmed.customerId : 'none'} customers={state.customers} confirmed={confirmed} onConfirm={onConfirmCustomer} onClear={onClearConfirmation} onView360={onShow360} audit={audit} />
       <CreateCaseForm key={confirmed ? `confirmed-${confirmed.customerId}` : 'none'} customers={state.customers} cases={state.cases} preselectedCustomerId={confirmed?.customerId} onCreateAndRun={onCreateAndRun} />
-      <div className="row">
-        <button className="btn secondary" onClick={onShowCases}>See all 5 journeys</button>
-        <span className="small muted">Creating a case takes about 30 seconds end to end, including your approval step.</span>
-      </div>
       <div className="cards">
-        <div className="card"><div className="num">{dash.casesResolved}</div><div className="lbl">Cases resolved by agent</div></div>
-        <div className="card"><div className="num">{dash.successRate === null ? '—' : `${dash.successRate}%`}</div><div className="lbl">Success rate {dash.successRate === null ? '(no runs yet)' : ''}</div></div>
-        <div className="card"><div className="num">{medianMin === null ? '—' : `${medianMin.toFixed(2)} min`}</div><div className="lbl">Median agent time (measured) vs {MANUAL_MINUTES} min manual</div></div>
-        <div className="card"><div className="num">{dash.casesResolved ? money(costSaved) : '—'}</div><div className="lbl">Cost saved (measured cases only)</div></div>
+        <div className="card"><div className="num">{dash.casesResolved}</div><div className="lbl">Cases resolved</div></div>
+        <div className="card"><div className="num">{dash.successRate === null ? '—' : `${dash.successRate}%`}</div><div className="lbl">Success rate</div></div>
+        <div className="card"><div className="num">{medianMin === null ? '—' : `${medianMin.toFixed(2)} min`}</div><div className="lbl">Median agent time (vs {MANUAL_MINUTES} min manual)</div></div>
+        <div className="card"><div className="num">{dash.casesResolved ? money(costSaved) : '—'}</div><div className="lbl">Cost saved (measured)</div></div>
         <div className="card"><div className="num">{dash.creditsIssued ? money(dash.creditsIssued) : '—'}</div><div className="lbl">Credits issued</div></div>
-        <div className="card"><div className="num">{state.orders.filter((o) => o.status === 'activated').length}</div><div className="lbl">Lines / orders activated</div></div>
-        <div className="card"><div className="num">{state.orders.filter((o) => o.status === 'scheduled').length}</div><div className="lbl">Technician visits scheduled</div></div>
-        <div className="card"><div className="num">{state.customers.filter((cu) => cu.plan === 'Unlimited Premium').length}</div><div className="lbl">Customers on Premium (after upgrades)</div></div>
         <div className="card"><div className="num">{dash.casesOpen}</div><div className="lbl">Cases open</div></div>
-        <div className="card"><div className="num">{state.customers.length}</div><div className="lbl">Customers in caseload</div></div>
-        <div className="card"><div className="num">{state.runs.length}</div><div className="lbl">Agent runs (all time)</div></div>
       </div>
       {dash.runs === 0 && <div className="notice">No runs yet — the numbers above show “—” rather than a fake 100%. Create a case above to see real, measured outcomes.</div>}
       <ProductionReadinessPanel health={health} state={state} />
-      <div className="grid2">
-        <div className="panel">
-          <h2>How it works</h2>
-          <pre className="log">{`Sources (CRM, billing, usage) → ETL pipelines → Customer 360
-  → FastAPI + LangGraph-style agent (deterministic tools)
-  → RAG over policy docs (cited, refuses when not in docs)
-  → Human approval gate → credit posted → ledger + notify
-  → Verify → measured outcome → audit log`}</pre>
-          <p className="small muted">The deployed app runs the same deterministic engine in TypeScript. The Python FastAPI + LangGraph-style backend in <code>server/</code> is the reference implementation — same rules, same tests. Neither calls a live LLM or a real AT&amp;T system.</p>
-        </div>
-        <div className="panel">
-          <h2>Recent runs</h2>
-          {state.runs.length === 0 ? <p className="muted">No runs yet.</p> : state.runs.slice(0, 5).map((r) => (
-            <div key={r.id} className="row space" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-              <span>{r.id} · {r.caseId}</span>
-              <span className="row">{statusPill(r.status)}<span className="small muted">{r.agentMs === null ? '' : fmtMs(r.agentMs)}</span></span>
-            </div>
-          ))}
-          <h2 className="mt">Notifications sent</h2>
-          {state.notifications.length === 0 ? <p className="muted">None yet — a notification is created only when a credit is actually posted.</p> : state.notifications.slice(0, 3).map((n) => <p key={n.id} className="small">{n.message}</p>)}
-        </div>
+      <div className="panel">
+        <h2>Recent runs</h2>
+        {state.runs.length === 0 ? <p className="muted">No runs yet.</p> : state.runs.slice(0, 5).map((r) => (
+          <div key={r.id} className="row space" style={{ padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+            <span className="small">{r.id} · {r.caseId}</span>
+            <span className="row">{statusPill(r.status)}<span className="small muted">{r.agentMs === null ? '' : fmtMs(r.agentMs)}</span></span>
+          </div>
+        ))}
+        <h2 className="mt">Notifications sent</h2>
+        {state.notifications.length === 0 ? <p className="muted small">None yet — a notification is created only when a credit is actually posted.</p> : state.notifications.slice(0, 3).map((n) => <p key={n.id} className="small">{n.message}</p>)}
       </div>
     </section>
   );
@@ -491,6 +460,7 @@ function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, 
  * line of the Principal AI-Native Software Engineer JD to the file
  * that implements it and how to verify it. */
 function ProductionReadinessPanel({ health, state }: { health: HealthStatus | null; state: AppState }) {
+  const [open, setOpen] = useState(false);
   const medallion = useMemo(() => buildMedallion(state, defaultBatchId(state)), [state]);
   const lastEval = state.evalRuns[0];
   const rows: { label: string; tone: 'green' | 'red' | 'amber' | 'blue' | ''; status: string; detail: string }[] = [
@@ -542,7 +512,7 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
   if (health && health.datasource.mode === 'seed') todos.push('Connect ATT_API_BASE_URL + ATT_API_KEY and set DATASOURCE=att for live AT&T data — the adapter fails honestly until then, never fakes it.');
   if (health && !health.db.configured) todos.push('Provision Postgres and set DATABASE_URL when the fulfilment team wires the store (reserved today).');
   if (health && !health.auth.enabled) todos.push('Register the Entra ID app and set AUTH_ENABLED=true + AUTH_CLIENT_ID + AUTH_ISSUER_URL when login is required.');
-  if (!lastEval) todos.push('Run the evaluation suite (Evaluations tab) — no release is approved without a passing 85% gate.');
+  if (!lastEval) todos.push('Run the evaluation suite (System → Evaluations) — no release is approved without a passing 85% gate.');
   if (health?.datasource.mode === 'att' && health.datasource.status !== 'configured') todos.push('att mode is selected but its connection vars are missing — data loads will fail honestly until they are set.');
   const jd: { n: number; label: string; tone: 'green' | 'amber' | 'blue'; status: string }[] = [
     { n: 1, label: 'Production Python + FastAPI (api/ ↔ server/ mirrors)', tone: 'green', status: 'live' },
@@ -558,9 +528,16 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
     { n: 11, label: 'Event-driven — append-only feed, Kafka/SNS seam', tone: 'green', status: 'live' },
     { n: 12, label: 'AI-assisted engineering, disclosed', tone: 'green', status: 'documented' },
   ];
+  const readyCount = rows.filter((r) => r.tone === 'green').length;
+  const todoCount = todos.length;
   return (
     <div className="panel mt">
-      <h2>Production readiness — live checklist</h2>
+      <div className="row space">
+        <span><strong>Production readiness</strong> <span className="small muted">· {readyCount} of {rows.length} checks green · {todoCount} fulfilment item{todoCount === 1 ? '' : 's'} open{!lastEval ? ' · evals not run yet' : ''}</span></span>
+        <button className="btn small secondary" onClick={() => setOpen((v) => !v)}>{open ? 'Hide details' : 'Show details'}</button>
+      </div>
+      {open && (
+      <>
       <p className="small muted">Every row is computed from /api/health, the last eval run, or the Medallion snapshot — not claimed. See docs/JD_COVERAGE.md for the full JD mapping.</p>
       {rows.map((r) => (
         <div key={r.label} className="row space" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
@@ -585,6 +562,8 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
         ))}
         <p className="small muted mt">Full mapping — file, how to verify, and what is honestly still missing — in docs/JD_COVERAGE.md.</p>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -627,7 +606,7 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun, conf
   return (
     <section>
       <h1>Find a customer</h1>
-      <p className="muted">Where every call starts: find the account, verify the customer, open Customer 360 — the same 360 the agent builds in its RETRIEVE_360 step — then create a case from there. Search by name, phone number, account number, email or customer ID. Synthetic demo data — invented names, accounts and phone numbers. No real PII.</p>
+      <p className="small muted">Search below, or find &amp; confirm above. Synthetic demo data — no real PII.</p>
       <ConfirmCustomerForm key={confirmed ? confirmed.customerId : 'none'} customers={state.customers} confirmed={confirmed} onConfirm={(customer, method) => { onConfirmCustomer(customer, method); setSel(customer); setShowIntake(false); }} onClear={() => { onClearConfirmation(); setSel(null); setShowIntake(false); }} audit={audit} />
       <div className="row">
         <input className="search" type="text" placeholder="Search name, phone, account, email or customer ID…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
@@ -658,24 +637,23 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun, conf
       {search.results.length === 0 && <p className="muted mt">No customers match that search.</p>}
       <div className="panel">
         <h2>Add a customer</h2>
-        <div className="grid2">
-          <div><label>Name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></div>
-          <div><label>Plan</label><select value={plan} onChange={(e) => setPlan(e.target.value)}><option>Unlimited Starter</option><option>Unlimited Premium</option><option>Family Share</option><option>Business Elite</option></select></div>
-        </div>
-        <button className="btn mt" disabled={!name.trim()} onClick={() => {
+        <div className="row">
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" style={{ maxWidth: '260px' }} />
+          <select value={plan} onChange={(e) => setPlan(e.target.value)} style={{ maxWidth: '180px' }}><option>Unlimited Starter</option><option>Unlimited Premium</option><option>Family Share</option><option>Business Elite</option></select>
+          <button className="btn" disabled={!name.trim()} onClick={() => {
           const id = uid('CUST');
           mutate((s) => ({ ...s, customers: [...s.customers, { id, name: name.trim(), account: `ACC-${Math.floor(100000 + Math.random() * 899999)}`, phone: '(555) 555-0100', email: '', plan, status: 'active', since: new Date().toISOString().slice(0, 10), balance: 0, city: '—' }] }));
           audit('human', 'customer_created', `Created customer ${name.trim()} (${id}).`);
           emit(newAppEvent('customer_created', 'human', `Created customer ${name.trim()} (${id}).`));
           setName('');
         }}>Add customer</button>
+        </div>
       </div>
       {view360 && view360.customer && (
         <div className="panel highlight">
           <div className="row space"><h2>Customer 360 — {view360.customer.name}</h2><button className="btn small secondary" onClick={() => { setSel(null); setShowIntake(false); }}>Close</button></div>
           <p className="small muted">{view360.customer.id} · {view360.customer.account} · {view360.customer.phone}{view360.customer.email ? ` · ${view360.customer.email}` : ''}</p>
           <p className="small">Plan: <strong>{view360.customer.plan}</strong> · Balance: <strong>{money(view360.customer.balance)}</strong> · Status: <strong>{view360.customer.status}</strong> · Customer since {view360.customer.since} · {view360.customer.city}</p>
-          <p className="small muted">This is the same Customer 360 the agent builds in its RETRIEVE_360 step before it grounds itself in policy — one record, assembled from CRM, billing and usage.</p>
           {confirmed && confirmed.customerId === view360.customer.id ? (
             <p className="small ok">Verified via {verificationLabel(confirmed.method)} at {formatVerifiedAt(confirmed.at)} — this session. Changes below apply to this customer.</p>
           ) : (
@@ -721,7 +699,7 @@ function CasesView({ state, onRun, onApprove, onReject, onCreateAndRun }: {
   return (
     <section>
       <h1>Cases</h1>
-      <p className="muted">Run the agent on a case. It validates, grounds, and proposes — then waits for a human. Approving posts a real credit to the ledger and changes the customer balance.</p>
+      <p className="small muted">Run the agent on a case — it proposes, then waits for your approval. Approving posts a real credit to the ledger.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Case</th><th>Customer</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>{state.cases.map((c) => {
@@ -778,6 +756,56 @@ function CasesView({ state, onRun, onApprove, onReject, onCreateAndRun }: {
   );
 }
 
+/* ---------------- System ----------------
+ * The operator's daily work is Dashboard / Data / Customers / Cases.
+ * Everything else — pipelines, Medallion, knowledge, evaluations,
+ * observability — lives here under one tab, so the top nav stays short
+ * and the daily screens stay clean. Every view is still reachable and
+ * works exactly as before. */
+type SystemSection = 'pipelines' | 'medallion' | 'knowledge' | 'evals' | 'observability';
+const SYSTEM_NAV: { id: SystemSection; label: string }[] = [
+  { id: 'pipelines', label: 'Pipelines' },
+  { id: 'medallion', label: 'Medallion' },
+  { id: 'knowledge', label: 'Knowledge' },
+  { id: 'evals', label: 'Evaluations' },
+  { id: 'observability', label: 'Observability' },
+];
+function SystemView({ state, mutate, audit, emit, onReset }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void; onReset: () => void }) {
+  const [section, setSection] = useState<SystemSection>('pipelines');
+  return (
+    <section>
+      <nav className="subtabs">
+        {SYSTEM_NAV.map((n) => <button key={n.id} className={section === n.id ? 'active' : ''} onClick={() => setSection(n.id)}>{n.label}</button>)}
+      </nav>
+      {section === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} emit={emit} />}
+      {section === 'medallion' && <MedallionView state={state} audit={audit} />}
+      {section === 'knowledge' && <KnowledgeView state={state} mutate={mutate} audit={audit} />}
+      {section === 'evals' && <EvalsView state={state} mutate={mutate} audit={audit} emit={emit} />}
+      {section === 'observability' && <ObservabilityView state={state} onReset={onReset} />}
+    </section>
+  );
+}
+
+/* ---------------- Knowledge ----------------
+ * RAG and STAIR are one screen: the policy knowledge the agent
+ * grounds itself in. "Policy docs" is the chunk-RAG view (answers only
+ * from the indexed docs, with citations); "STAIR" is the structured
+ * retriever over the same policies. */
+function KnowledgeView({ state, mutate, audit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void }) {
+  const [tab, setTab] = useState<'docs' | 'stair'>('docs');
+  return (
+    <section>
+      <h1>Knowledge</h1>
+      <p className="small muted">The policy knowledge the agent grounds itself in — answers come only from these docs, with citations, and refuse when not in the docs.</p>
+      <nav className="subtabs">
+        <button className={tab === 'docs' ? 'active' : ''} onClick={() => setTab('docs')}>Policy docs (RAG)</button>
+        <button className={tab === 'stair' ? 'active' : ''} onClick={() => setTab('stair')}>STAIR</button>
+      </nav>
+      {tab === 'docs' ? <RagView state={state} mutate={mutate} audit={audit} /> : <StairView state={state} />}
+    </section>
+  );
+}
+
 /* ---------------- Pipelines ---------------- */
 function PipelinesView({ state, mutate, audit, emit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void }) {
   const [runningId, setRunningId] = useState<string | null>(null);
@@ -800,7 +828,7 @@ function PipelinesView({ state, mutate, audit, emit }: { state: AppState; mutate
   return (
     <section>
       <h1>Pipelines</h1>
-      <p className="muted">ETL runs validate the seeded batch and count what actually passed or failed. Exceptions are listed, not hidden. These are the <strong>Medallion Silver quality gates</strong> — see the Medallion tab for Bronze → Silver → Gold, quarantine, and lineage.</p>
+      <p className="small muted">ETL runs validate the seeded batch and count what passed or failed. Exceptions are listed, not hidden. These are the Medallion Silver quality gates — see System → Medallion for Bronze → Silver → Gold, quarantine, and lineage.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Pipeline</th><th>Source → Destination</th><th>Last run</th><th></th></tr></thead>
         <tbody>{state.pipelines.map((p) => (
@@ -843,12 +871,12 @@ function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' |
   return (
     <section>
       <h1>Medallion — Bronze → Silver → Gold</h1>
-      <p className="muted">One operator runs the whole platform: if a pipeline fails, that person fixes it with the Copilot prompt on the failure card — no 5–6 person engineer team. Bad records go to quarantine, never silently dropped; Gold is rebuilt from Silver, never edited directly. Batch {snapshot.batchId} · watermark: only records not seen before are re-validated.</p>
+      <p className="small muted">One operator runs the whole platform: a failure is fixed with the Copilot prompt on its card — no 5–6 person team. Bad records go to quarantine, never silently dropped; Gold is rebuilt from Silver, never edited directly.</p>
       <div className="cards">
-        <div className="card"><div className="num">{snapshot.bronzeTotal}</div><div className="lbl">Bronze — raw as received (immutable) · {snapshot.bronzeBySource.customers} customers + {snapshot.bronzeBySource.ledger} ledger + {snapshot.bronzeBySource.usage} usage</div></div>
-        <div className="card"><div className="num">{snapshot.silverPassed}</div><div className="lbl">Silver — passed the quality gates · {snapshot.silverQuarantined} quarantined</div></div>
-        <div className="card"><div className="num">{snapshot.gold.ledgerReconciled}</div><div className="lbl">Gold — reconciled ledger entries · ${snapshot.gold.ledgerReconciledTotal.toFixed(2)}</div></div>
-        <div className="card"><div className="num">{snapshot.gold.customers360}</div><div className="lbl">Gold — Customer 360 · {snapshot.gold.usageRollup} usage rollups, {snapshot.gold.usageTotalGb} GB</div></div>
+        <div className="card"><div className="num">{snapshot.bronzeTotal}</div><div className="lbl">Bronze — raw as received</div></div>
+        <div className="card"><div className="num">{snapshot.silverPassed}</div><div className="lbl">Silver — passed · {snapshot.silverQuarantined} quarantined</div></div>
+        <div className="card"><div className="num">{snapshot.gold.ledgerReconciled}</div><div className="lbl">Gold — reconciled ledger · ${snapshot.gold.ledgerReconciledTotal.toFixed(2)}</div></div>
+        <div className="card"><div className="num">{snapshot.gold.customers360}</div><div className="lbl">Gold — Customer 360 · {snapshot.gold.usageTotalGb} GB</div></div>
       </div>
       <p className="small muted">Reconciliation: Bronze {snapshot.bronzeTotal} = Silver passed {snapshot.silverPassed} + quarantined {snapshot.silverQuarantined}. Gold is built only from Silver-passed records.</p>
       <div className="row">
@@ -882,7 +910,7 @@ function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' |
         ))}
       </div>
       <h2 className="mt">Failure cards — one operator + Copilot</h2>
-      <p className="small muted">Each card has what failed, the exact record and batch, the error, and a ready-to-paste Copilot prompt naming the file and function to fix. Fix in Bronze/Silver, re-run the batch — never edit Gold directly.</p>
+      <p className="small muted">What failed, the exact record and batch, the error, and a ready-to-paste Copilot prompt. Fix in Bronze/Silver, re-run the batch — never edit Gold directly.</p>
       {snapshot.failureCards.map((card) => (
         <div key={card.id} className="panel">
           <div className="row space"><strong>{card.id}</strong><span className="small muted">{card.pipelineId} · batch {card.batchId}</span></div>
@@ -892,7 +920,7 @@ function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' |
           <button className="btn small secondary" onClick={() => copyPrompt(card.id, card.copilotPrompt)}>{copiedId === card.id ? 'Copied — paste it into Copilot' : 'Copy Copilot prompt'}</button>
         </div>
       ))}
-      <p className="small muted mt">Scale, honestly: this demo runs on the 20-customer synthetic seed (106 records). Petabyte scale is architectural — partitioning by ingest date + customer, incremental watermark loads, dedup by idempotency key — and is not measured at petabyte volume here. The same code paths run at both scales. See docs/OPERATOR_RUNBOOK.md for the 1-person operations guide.</p>
+      <p className="small muted mt">Scale, honestly: this demo runs on the 20-customer synthetic seed (106 records). Petabyte scale is architectural, not measured here. See docs/OPERATOR_RUNBOOK.md for the 1-person operations guide.</p>
     </section>
   );
 }
@@ -912,8 +940,7 @@ function RagView({ state, mutate, audit }: { state: AppState; mutate: (fn: (s: A
   };
   return (
     <section>
-      <h1>RAG Knowledge Base</h1>
-      <p className="muted">Answers come only from the indexed policy docs below, with citations. If the answer is not in the docs, the system refuses instead of guessing. No live LLM.</p>
+      <p className="small muted">Answers come only from the indexed policy docs, with citations. If the answer is not in the docs, the system refuses instead of guessing.</p>
       <div className="row"><input className="search" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask about a policy…" /><button className="btn" onClick={() => search(q)}>Search</button></div>
       {answer && (
         <div className="panel mt">
@@ -985,7 +1012,7 @@ function EvalsView({ state, mutate, audit, emit }: { state: AppState; mutate: (f
   return (
     <section>
       <h1>Evaluations</h1>
-      <p className="muted">8 checks: duplicate detection, amount, non-duplicate discrimination, RAG grounding, RAG refusal, idempotency, and the agent plan. Release gate: {EVAL_GATE_PCT}%. The suite runs against live state — delete POL-001 and it fails.</p>
+      <p className="small muted">8 checks: duplicate detection, amount, non-duplicate discrimination, RAG grounding, RAG refusal, idempotency, and the agent plan. Release gate: {EVAL_GATE_PCT}%. The suite runs against live state — delete POL-001 and it fails.</p>
       <div className="row">
         <button className="btn" onClick={runSuite}>Run evaluation suite</button>
         <button className="btn accent" onClick={requestRelease}>Request release</button>
@@ -1020,7 +1047,7 @@ function ObservabilityView({ state, onReset }: { state: AppState; onReset: () =>
   return (
     <section>
       <h1>Observability</h1>
-      <p className="muted">Every agent step with measured timing, every pipeline run, and every action in the audit log. Nothing is reported that was not measured.</p>
+      <p className="small muted">Every agent step with measured timing, every pipeline run, and every action in the audit log. Nothing is reported that was not measured.</p>
       <h2>Agent runs</h2>
       {state.runs.length === 0 ? <p className="muted">No runs yet.</p> : state.runs.map((r) => (
         <div key={r.id} className="panel">
@@ -1030,13 +1057,13 @@ function ObservabilityView({ state, onReset }: { state: AppState; onReset: () =>
         </div>
       ))}
       <h2 className="mt">Audit log ({state.audit.length})</h2>
-      <p className="small muted">Every entry carries its run ID, measured duration, and trace ID when it belongs to a run. Phone numbers and email addresses are masked at the audit sink — they never reach this log. The operator login id is stored on every audit record for backend investigation but is deliberately NOT shown here or on any screen.</p>
+      <p className="small muted">Phone/email are masked at the audit sink. The operator login id is stored on every record for backend investigation and is never shown here.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Run / Trace</th><th>Duration</th><th>Detail</th></tr></thead>
         <tbody>{state.audit.slice(0, 50).map((a) => <tr key={a.id}><td>{a.at.slice(0, 19).replace('T', ' ')}</td><td>{a.actor}</td><td>{a.action}</td><td className="small">{a.runId ?? '—'}{a.traceId ? <><br /><span className="muted">{a.traceId}</span></> : null}</td><td>{fmtMs(a.durationMs ?? null)}</td><td>{a.detail}</td></tr>)}</tbody>
       </table></div>
       <h2 className="mt">Event feed ({(state.events ?? []).length}) — append-only</h2>
-      <p className="small muted">Every state change emits a structured event (case_created, credit_proposed, credit_approved, credit_executed, pipeline_failed, …). This in-app feed is the seam where a real event bus (Kafka / SNS / EventBridge) plugs in — replace the append with a publish and subscribers get the same event types; see src/lib/events.ts and server/events.py.</p>
+      <p className="small muted">Append-only — the seam where a real event bus (Kafka / SNS / EventBridge) plugs in.</p>
       {(state.events ?? []).length === 0 ? <p className="muted">No events yet — run a case, create a case, or run a pipeline.</p> : (
         <div className="table-wrap"><table>
           <thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Run / Trace</th><th>Detail</th></tr></thead>
@@ -1065,8 +1092,7 @@ function StairView({ state }: { state: AppState }) {
   };
   return (
     <section>
-      <h1>STAIR — STructure Aware Information Retriever</h1>
-      <p className="muted">IBM Research (Kumar et al., arXiv 2609.03874). No chunking, no embeddings, no vector database. Docs are structured trees with a Table of Contents; retrieval navigates the full TOC to the exact leaf section and answers only from that leaf, retrieved intact.</p>
+      <p className="small muted">IBM Research (Kumar et al., arXiv 2609.03874). No chunking, no embeddings, no vector DB — docs are structured trees; retrieval navigates the TOC to the exact leaf and answers only from that leaf, intact.</p>
       <div className="row"><input className="search" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask about a policy…" /><button className="btn" onClick={() => runQuery(q)}>Retrieve</button></div>
       {trace && (
         <div className="panel highlight mt">

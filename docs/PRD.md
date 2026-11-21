@@ -369,7 +369,7 @@ engineering team required for day-to-day operation.
    caseload) and sees the proposed credit, the §4.2 citation, and the
    verified result — in under a minute. There is no canned demo case: every
    run starts from a case the operator just created.
-2. The Medallion tab reconciles to the record: Bronze 106 = Silver 101
+2. The System → Medallion reconciles to the record: Bronze 106 = Silver 101
    + quarantined 5; Gold ledger $2,318.95.
 3. The production-readiness panel shows exactly what is live and
    exactly what the fulfilment team still needs to connect — no

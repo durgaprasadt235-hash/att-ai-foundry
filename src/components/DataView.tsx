@@ -167,13 +167,10 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
   return (
     <section>
       <h1>Data — bring your own dataset</h1>
-      <p className="muted">
-        No live connection is needed for a first call. Bring an anonymised sample file, upload it here,
-        check the validation report, and test with it in minutes. A file uploads anyway — raw or
-        cleansed, that is the process: raw data is cleansed automatically (balances recomputed from
-        the ledger, unfixable records quarantined and listed) and comes out as a production-ready file.
-        A live connection to AT&amp;T systems is a separate step that takes days to weeks — see{' '}
-        <code>docs/DATASET_GUIDE.md</code>.
+      <p className="small muted">
+        No live connection is needed for a first call. Upload an anonymised sample file, check the
+        validation report, and test with it in minutes — raw data is cleansed automatically and comes
+        out as a production-ready file. See <code>docs/DATASET_GUIDE.md</code>.
       </p>
 
       <div className="panel">
@@ -186,8 +183,8 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
           {state.cases.length} cases · {state.docs.length} policy docs · {state.stairTrees.length} STAIR trees
         </p>
         <p className="small muted">
-          Uploaded datasets stay in this browser only — they are stored in localStorage like the rest of the
-          app state, never sent to a server, and never written into the built-in seed files.
+          Uploaded datasets stay in this browser only — stored in localStorage, never sent to a server,
+          never written into the built-in seed files.
         </p>
         {datasetSource === 'uploaded' && (
           confirmReset ? (
@@ -228,10 +225,8 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
               {validation.counts.stairTrees} STAIR trees
             </p>
             <p className="small muted">
-              This report is a pre-check, not a gate. A file with errors is not rejected — it is
-              accepted raw and cleansed automatically on load (balances recomputed from the ledger,
-              unfixable records quarantined). Every correction and quarantine is listed in the
-              cleansing report below; the raw file itself is never modified.
+              A pre-check, not a gate: a file with errors is accepted raw and cleansed on load.
+              Every correction and quarantine is listed below; the raw file is never modified.
             </p>
             {validation.errors.length > 0 && (
               <div>
@@ -264,9 +259,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
                   Load raw &amp; cleanse automatically
                 </button>
                 <p className="small muted">
-                  Loads the cleansed dataset — balances corrected from the ledger, bad records
-                  quarantined and listed. Dashboard, Cases, Medallion, Pipelines and Search all
-                  run on the cleansed data.
+                  Loads the cleansed dataset. Dashboard, Cases and Search all run on the cleansed data.
                 </p>
               </div>
             ) : (
@@ -293,11 +286,11 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
             </p>
             <p className="small">
               <strong>{cleanseReport.corrected.length} balance correction(s)</strong> — the ledger is the
-              source of truth, each balance was recomputed from the posted ledger entries.{' '}
-              <strong>{cleanseReport.quarantined.length} record(s) quarantined</strong> — removed from the
-              cleansed set, listed with reasons, never deleted from your raw file.{' '}
-              <strong>{cleanseReport.notes.length} note(s)</strong> — records kept as-is (duplicate charges,
-              suspended accounts with a balance, zero-amount entries).
+              source of truth.{' '}
+              <strong>{cleanseReport.quarantined.length} record(s) quarantined</strong> — listed with reasons,
+              never deleted from your raw file.{' '}
+              <strong>{cleanseReport.notes.length} note(s)</strong> — kept as-is (duplicates, suspended
+              accounts, zero-amount entries).
             </p>
             {cleanseReport.corrected.length > 0 && (
               <div>
@@ -330,9 +323,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
               </div>
             )}
             <p className="small">
-              The cleansed dataset passed validation with 0 errors and is now the working caseload.
-              Download it as the production-ready file — same shape as <code>test-data.json</code>,
-              ready to hand to the fulfilment team or use as a new seed.
+              The cleansed dataset passed validation with 0 errors — download it as the production-ready file.
             </p>
             <div className="row">
               <button
@@ -358,8 +349,8 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
       <div className="panel mt">
         <h2>Download a template</h2>
         <p className="small muted">
-          Start from a small example that already passes validation (3 customers, 1 duplicate charge,
-          1 case) and replace the rows with your own anonymised sample.
+          A small example that already passes validation (3 customers, 1 duplicate charge, 1 case) —
+          replace the rows with your own anonymised sample.
         </p>
         <div className="row">
           <button className="btn small secondary" onClick={() => download('dataset-template.json', templateDatasetJson(), 'application/json')}>dataset-template.json</button>

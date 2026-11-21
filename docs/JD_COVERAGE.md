@@ -40,15 +40,15 @@ panel (which computes its rows from `/api/health` and live state).
 
 | JD line | Implemented in | How to verify | Status |
 |---|---|---|---|
-| Eval suite + 85% release gate | `src/lib/engine.ts:runEvalSuite/evalScore`, `server/engine.py:run_eval_suite/eval_score`, `EVAL_GATE_PCT = 85` | Evaluations tab → Run evaluation suite; `pytest server/test_engine.py` | done |
-| Gate BLOCKS a "release" action | Evaluations tab → **Request release** button; `POST /evals/release-gate` (`server/app.py`) | Click Request release with no suite / a failing suite → BLOCKED with named failed checks; `pytest server/test_release_gate.py` | done |
+| Eval suite + 85% release gate | `src/lib/engine.ts:runEvalSuite/evalScore`, `server/engine.py:run_eval_suite/eval_score`, `EVAL_GATE_PCT = 85` | System → Evaluations → Run evaluation suite; `pytest server/test_engine.py` | done |
+| Gate BLOCKS a "release" action | System → Evaluations → **Request release** button; `POST /evals/release-gate` (`server/app.py`) | Click Request release with no suite / a failing suite → BLOCKED with named failed checks; `pytest server/test_release_gate.py` | done |
 
 ## 5. RAG
 
 | JD line | Implemented in | How to verify | Status |
 |---|---|---|---|
-| STAIR primary, chunk RAG labelled baseline | `src/lib/stair.ts`, `server/stair_retriever.py` | STAIR tab; `pytest server/test_stair.py` | done |
-| Honest comparison view (STAIR vs chunk baseline Recall@1, 10 questions) | STAIR tab "Per-query eval detail — STAIR vs chunk-RAG baseline"; `GET /stair/eval` returns both, per query | STAIR tab table; `pytest server/test_stair.py::test_chunk_baseline_eval_has_per_query_detail`, `server/test_health.py::test_stair_eval_includes_chunk_baseline` | done |
+| STAIR primary, chunk RAG labelled baseline | `src/lib/stair.ts`, `server/stair_retriever.py` | System → Knowledge → STAIR; `pytest server/test_stair.py` | done |
+| Honest comparison view (STAIR vs chunk baseline Recall@1, 10 questions) | System → Knowledge → STAIR "Per-query eval detail — STAIR vs chunk-RAG baseline"; `GET /stair/eval` returns both, per query | System → Knowledge → STAIR table; `pytest server/test_stair.py::test_chunk_baseline_eval_has_per_query_detail`, `server/test_health.py::test_stair_eval_includes_chunk_baseline` | done |
 | No vector DB by design; adapter interface where embeddings plug in | Comment + seam in `stairRetrieve()` / `retrieve()` (`src/lib/stair.ts`, `server/stair_retriever.py`): replace token-overlap scoring with an embedding lookup over the same leaf titles, keep the trie allowlist | Read the header comments; the contract (only a TOC leaf may be returned) is unchanged by the swap | done |
 
 ## 6. End-to-end backend + DB + frontend
@@ -65,7 +65,7 @@ panel (which computes its rows from `/api/health` and live state).
 |---|---|---|---|
 | Auth boundary | `src/lib/auth.ts`, `server/auth.py`; UI gate in `src/App.tsx` | `pytest server/test_auth.py`; set `AUTH_ENABLED=true` without config → honest "auth not configured" screen | done (gate) / connection (Entra ID callback not implemented) |
 | Secrets via env only | `src/lib/config.ts`, `server/config.py`, `.env.example`; `grep` proves no secret in code (see below) | `grep -r "gsk-\|sk-\|ATT_API_KEY=" --include="*.ts" --include="*.py" src server api \| grep -v "getEnv\|os.environ\|example"` → no hits; `pytest server/test_config.py::test_presence_flags_never_leak_values` | done |
-| Audit log | `src/lib/types.ts:AuditEntry` (runId, durationMs, traceId), frontend audit sink, plan/execute responses carry an audit entry | Observability tab → Audit log; `pytest server/test_health.py::test_plan_case_returns_run_id_duration_and_audit` | done |
+| Audit log | `src/lib/types.ts:AuditEntry` (runId, durationMs, traceId), frontend audit sink, plan/execute responses carry an audit entry | System → Observability → Audit log; `pytest server/test_health.py::test_plan_case_returns_run_id_duration_and_audit` | done |
 | Input validation | Pydantic models (`server/app.py`: `RagRequest`, `PlanRequest`, `ExecuteRequest`); `missingToolInputs` | `pytest server/test_execute.py::test_execute_requires_idempotency_key` (422); `test_tool_contracts.py` | done |
 | PII-aware handling + redaction helper | `src/lib/redact.ts`, `server/redact.py` (mask phone/email); used at every log/audit/event sink + API responses | `pytest server/test_redact.py`, `server/test_events.py::test_event_payloads_are_redacted`; node check of the TS helper (see verification report) | done |
 | Demo data is synthetic | `src/lib/seed.ts`, `server/seed.json`, labelled in the UI + `/health` (`demoData: "synthetic"`) | Read the seed header; Dashboard + Customers tab labels | done |
@@ -77,8 +77,8 @@ panel (which computes its rows from `/api/health` and live state).
 | Structured JSON logging with run id | `server/observability.py:json_log` (one JSON line per action: ts, event, run_id, trace_id, duration_ms) | `pytest server/test_observability.py::test_json_log_emits_one_parseable_json_line`; watch `uvicorn` stdout during a plan call | done |
 | Metrics (counts per pipeline/layer) | `GET /metrics` (`server/observability.py:build_metrics`) | `curl localhost:8000/metrics`; `pytest server/test_health.py::test_metrics_counts_come_from_live_state` | done |
 | Distributed tracing — traceId on every run | `traceId` on `AgentRun`/`AuditEntry`, plan + execute responses, UI run view | Run a case → trace id in the run panel; `pytest server/test_health.py::test_plan_response_carries_trace_id_and_state_trace` | done |
-| Dashboards (app's own views) | Dashboard, Observability, Medallion tabs | Open the app | done |
-| Alerting (failure cards + Copilot prompts) | Medallion failure cards (`src/lib/medallion.ts`, `server/medallion.py`) | Medallion tab → Failure cards; quarantine list | done |
+| Dashboards (app's own views) | Dashboard, Observability, System → Medallions | Open the app | done |
+| Alerting (failure cards + Copilot prompts) | Medallion failure cards (`src/lib/medallion.ts`, `server/medallion.py`) | System → Medallion → Failure cards; quarantine list | done |
 | Incident troubleshooting (runbook) | `docs/OPERATOR_RUNBOOK.md`, `docs/DEPLOYMENT.md` §6 | Read them; follow a failure card's Copilot prompt | done |
 
 ## 9. Testing / CI / CD / Docker
@@ -97,22 +97,22 @@ panel (which computes its rows from `/api/health` and live state).
 | Retries | Retry-once on transient failures (tool contracts, Groq, AT&T adapter, Medallion) | `pytest server/test_datasource.py`, `test_groq.py` | done |
 | Timeouts | Groq 20s, AT&T adapter 10s, deterministic tools 5s (tool contracts) | `GET /tools`; read the contracts | done |
 | Circuit breaker | `src/lib/groq.ts`, `server/groq_client.py`: opens after 3 consecutive failures, 60s cooldown, half-open trial; reported as `llm_circuit` in `/health` | `pytest server/test_groq.py::test_circuit_breaker_opens_after_three_failures`, `test_circuit_breaker_half_open_trial_success_closes_it`; node check of the TS breaker | done |
-| Backpressure (bounded batch sizes) | `MEDALLION_BATCH_LIMIT = 1000` (`src/lib/medallion.ts`, `server/medallion.py`); deferred records reported, never dropped | `pytest server/test_medallion.py::test_incremental_batch_is_bounded_and_defers_the_rest`; Medallion tab batch panel | done |
+| Backpressure (bounded batch sizes) | `MEDALLION_BATCH_LIMIT = 1000` (`src/lib/medallion.ts`, `server/medallion.py`); deferred records reported, never dropped | `pytest server/test_medallion.py::test_incremental_batch_is_bounded_and_defers_the_rest`; System → Medallion batch panel | done |
 | Graceful degradation (deterministic fallback everywhere, UI says which mode) | Deterministic engine is the default and the fallback; every run trace + the header say which mode was used | Create a case with no key → trace says "deterministic fallback" / "off"; run with a key → "groq" | done |
 
 ## 11. Event-driven
 
 | JD line | Implemented in | How to verify | Status |
 |---|---|---|---|
-| Event log — every state change emits a structured event | `src/lib/events.ts`, `server/events.py`; event types: `case_created`, `credit_proposed`, `credit_approved`, `credit_executed`, `plan_proposed`, `plan_approved`, `plan_executed`, `pipeline_run`, `pipeline_failed`, `run_failed`, `eval_run`, `release_approved`, `release_blocked` | Observability tab → Event feed; `GET /events`; `pytest server/test_events.py` | done |
-| Append-only in-app event feed | In-app feed (Observability tab), server feed (`GET /events`) | Create a case / run a case / run a pipeline → feed grows, newest first | done |
+| Event log — every state change emits a structured event | `src/lib/events.ts`, `server/events.py`; event types: `case_created`, `credit_proposed`, `credit_approved`, `credit_executed`, `plan_proposed`, `plan_approved`, `plan_executed`, `pipeline_run`, `pipeline_failed`, `run_failed`, `eval_run`, `release_approved`, `release_blocked` | System → Observability → Event feed; `GET /events`; `pytest server/test_events.py` | done |
+| Append-only in-app event feed | In-app feed (System → Observability), server feed (`GET /events`) | Create a case / run a case / run a pipeline → feed grows, newest first | done |
 | Kafka/SNS-style note: the feed is the seam where a real event bus plugs in | Header comments in `src/lib/events.ts` + `server/events.py`; `README.md` "Event-driven"; `docs/DEPLOYMENT.md` | Read the comments | done (seam documented; bus not wired — per-instance in-memory feed is not durable) |
 
 ## 12. AI coding assistants
 
 | JD line | Implemented in | How to verify | Status |
 |---|---|---|---|
-| Document that the build used AI-assisted engineering (Muse + Copilot-style fix prompts) with deterministic validation and human approval at every step | `README.md` "How this was built — AI-assisted engineering, disclosed"; Medallion failure cards carry ready-to-paste Copilot prompts (`src/lib/medallion.ts`, `server/medallion.py`) | Read the README section; Medallion tab → Failure cards → "Copy Copilot prompt" | done |
+| Document that the build used AI-assisted engineering (Muse + Copilot-style fix prompts) with deterministic validation and human approval at every step | `README.md` "How this was built — AI-assisted engineering, disclosed"; Medallion failure cards carry ready-to-paste Copilot prompts (`src/lib/medallion.ts`, `server/medallion.py`) | Read the README section; System → Medallion → Failure cards → "Copy Copilot prompt" | done |
 
 ## Honest limits (what is still NOT done)
 

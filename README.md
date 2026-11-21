@@ -273,7 +273,7 @@ The full 1-person guide is `docs/OPERATOR_RUNBOOK.md`.
 5 (2 suspended-with-balance customers, 3 duplicate ledger charges).
 Gold: Customer 360 = 20 customers, reconciled ledger = 63 entries
 totalling $2,318.95, usage rollup = 20 records (275.85 GB, 7,281 min,
-1,638 SMS). Lineage is shown in the Medallion tab — e.g. INV-2041:
+1,638 SMS). Lineage is shown in the System → Medallion — e.g. INV-2041:
 Bronze raw → Silver quarantined as a duplicate of INV-2039 → Gold
 excluded from the reconciled ledger, while the agent's $87.40 credit
 (CASE-1001) is what reaches Gold.
@@ -646,7 +646,7 @@ src/components/DataView.tsx  Data view: upload, validation report, templates, re
 src/lib/case-intake.ts   case intake — create a real case (no canned demo case)
 src/lib/customer-search.ts  Find a customer — name / phone (digits only) / account / email / customer ID, match reasons, 50-row cap
 src/components/CreateCaseForm.tsx  case-intake form (Dashboard, Cases, Customer 360 pre-filled)
-src/App.tsx            Dashboard (Production readiness panel), Data, Customers, Cases, Pipelines, Medallion, RAG, STAIR, Evals (release gate), Observability (audit + event feed)
+src/App.tsx            Dashboard, Data, Customers, Cases, System (Pipelines, Medallion, Knowledge, Evals incl. release gate, Observability)
 api/                   Vercel serverless: health, run-case, rag, stair
 docs/OPERATOR_RUNBOOK.md  1-person operations: daily loop, common failures + Copilot prompts, never-do list
 docs/DATASET_GUIDE.md  bring-your-own-dataset guide for the director's team: export, anonymise, first-call sample, honest live-connection timeline

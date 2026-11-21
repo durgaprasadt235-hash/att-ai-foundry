@@ -23,7 +23,7 @@ here, ask Copilot with the prompt on the card.
 
 ## Common failures — and the exact Copilot prompt to fix them
 
-Every failure also appears as a card in the Medallion tab with its prompt
+Every failure also appears as a card in the System → Medallion with its prompt
 ready to copy. These are the ones you will see most:
 
 | Failure | What it means | Fix (paste the card's prompt into Copilot) |
@@ -39,7 +39,7 @@ ready to copy. These are the ones you will see most:
 ## How to re-run after a fix
 
 1. Fix the source (Bronze) or the Silver gate — never Gold.
-2. Click **Run incremental batch** in the Medallion tab. The watermark
+2. Click **Run incremental batch** in the System → Medallion. The watermark
    skips records already processed, so only new/changed records are
    re-validated. A full rebuild is the same button after a demo reset.
 3. Check the record's lineage (type its invoice or customer id in the

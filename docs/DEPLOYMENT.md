@@ -49,7 +49,7 @@ curl -s $BASE/api/health | python3 -m json.tool
 #    status "awaiting_approval", proposedCredit 87.4, runId + traceId +
 #    durationMs, and agentStateTrace ending in AWAITING_APPROVAL.
 
-# 3. Medallion counts — Medallion tab (or GET /medallion on the FastAPI backend).
+# 3. Medallion counts — System → Medallion (or GET /medallion on the FastAPI backend).
 #    Expect: Bronze 106 = Silver passed 101 + quarantined 5;
 #    Gold reconciled ledger 63 entries, $2,318.95.
 ```
