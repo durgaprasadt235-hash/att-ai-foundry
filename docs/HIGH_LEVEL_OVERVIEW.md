@@ -90,9 +90,9 @@ it does not warn.
 
 ## Architecture, in brief
 
-- **Operator app** — a web application: Dashboard, Customers, Cases,
-  Data, and a System area (pipelines, data layers, knowledge,
-  evaluations, observability).
+- **Operator app** — a web application: Dashboard, Data, Customers,
+  Cases, System, and this Overview. The System area holds pipelines,
+  data layers, knowledge, evaluations, and observability.
 - **Agent engine** — the same rules in two forms: a deterministic
   engine in the app, and a Python reference backend (FastAPI-style,
   LangGraph-style state machine) in `server/`.

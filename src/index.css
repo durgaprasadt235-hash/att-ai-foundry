@@ -78,6 +78,17 @@ footer { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 10px;
   .info-tip-btn:focus-visible + .info-tip-bubble { display: block; }
 }
 .info-tip.open .info-tip-bubble { display: block; }
+/* Overview page — numbered rows, bullets and contact rows, all
+ * left-aligned on the same edge as every other view. Uses the same
+ * tokens: --line borders, --accent numbers, --muted labels. */
+.ov-steps { margin: 0; padding: 0; list-style: none; }
+.ov-steps li { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.ov-steps li:last-child { border-bottom: none; }
+.ov-num { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); font-size: 11px; font-weight: 700; line-height: 14px; text-align: center; margin-top: 2px; }
+.ov-bullets { margin: 0; padding-left: 18px; }
+.ov-bullets li { padding: 2px 0; }
+.ov-kv { display: grid; grid-template-columns: 72px 1fr; gap: 8px; padding: 3px 0; }
+.ov-kv .k { color: var(--muted); font-size: 12px; }
 @media (max-width: 720px) {
   .cards { grid-template-columns: repeat(3, 1fr); }
   .grid2, .grid3 { grid-template-columns: 1fr; }

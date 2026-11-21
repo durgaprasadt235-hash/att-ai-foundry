@@ -646,7 +646,8 @@ src/components/DataView.tsx  Data view: upload, validation report, templates, re
 src/lib/case-intake.ts   case intake — create a real case (no canned demo case)
 src/lib/customer-search.ts  Find a customer — name / phone (digits only) / account / email / customer ID, match reasons, 50-row cap
 src/components/CreateCaseForm.tsx  case-intake form (Dashboard, Cases, Customer 360 pre-filled)
-src/App.tsx            Dashboard, Data, Customers, Cases, System (Pipelines, Medallion, Knowledge, Evals incl. release gate, Observability)
+src/App.tsx            Dashboard, Data, Customers, Cases, System (Pipelines, Medallion, Knowledge, Evals incl. release gate, Observability), Overview
+src/components/OverviewView.tsx  High-level overview page (same content as docs/HIGH_LEVEL_OVERVIEW.md)
 api/                   Vercel serverless: health, run-case, rag, stair
 docs/OPERATOR_RUNBOOK.md  1-person operations: daily loop, common failures + Copilot prompts, never-do list
 docs/DATASET_GUIDE.md  bring-your-own-dataset guide for the director's team: export, anonymise, first-call sample, honest live-connection timeline
