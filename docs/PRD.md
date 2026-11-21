@@ -295,6 +295,18 @@ engineering team required for day-to-day operation.
   — it never silently falls back to synthetic data.
 - Audit log records every run, approval, rejection, and failure with
   run ID and duration.
+- **Staff accountability (backend only):** every audit entry and event
+  carries the operator's login id (`operatorId`) — search, Customer 360
+  views, case creates, agent runs, approvals, rejections, deletions,
+  dataset loads, pipeline and Medallion runs — so any change to a
+  customer or data can be traced to who made it. The id is stored on
+  the record for backend investigation and never rendered on any
+  screen. Demo mode uses the single labelled id `demo-operator`;
+  production resolves it from the signed-in operator's Entra ID
+  subject, and the audit log is persisted to Postgres with
+  `operatorId` indexed. Searches are audited with match type and
+  count only — never the raw query, which may be a phone number or
+  email.
 - Known limits: no rate limiting beyond a demo-grade in-memory guard;
   no RBAC yet (single-operator model); the Python backend is a
   reference implementation — production hardening (WAF, secret rotation,

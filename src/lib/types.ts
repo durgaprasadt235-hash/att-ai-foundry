@@ -159,6 +159,13 @@ export interface AuditEntry {
   actor: 'agent' | 'human' | 'system';
   action: string;
   detail: string;
+  /** Staff accountability (BACKEND ONLY — never rendered on any screen):
+   *  the login id of the operator who did this work, from
+   *  lib/auth.ts getCurrentOperatorId(). In demo mode this is the single
+   *  labelled id "demo-operator"; in production it is the signed-in
+   *  operator's Entra ID subject. Stored on every audit entry so any
+   *  change to a customer or data can be traced to who made it. */
+  operatorId: string;
   /** Structured run linkage (Phase 2): every run-related audit entry
    *  carries its run ID and measured duration — the same fields the
    *  server API returns (api/run-case.ts, server/app.py /cases/{id}/plan). */

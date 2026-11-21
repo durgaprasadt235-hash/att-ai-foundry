@@ -30,8 +30,12 @@ _MAX_EVENTS = 500
 
 def emit_event(event_type: str, actor: str, detail: str,
                run_id: str | None = None,
-               trace_id: str | None = None) -> dict:
-    """Append a structured event (redacted) and log it as JSON."""
+               trace_id: str | None = None,
+               operator_id: str = "demo-operator") -> dict:
+    """Append a structured event (redacted) and log it as JSON.
+
+    operator_id is the staff-accountability tag (backend only, never
+    rendered on a screen) — see DEMO_OPERATOR_ID in app.py."""
     if event_type not in EVENT_TYPES:
         raise ValueError(f"Unknown event type {event_type!r}")
     event = {
@@ -40,6 +44,7 @@ def emit_event(event_type: str, actor: str, detail: str,
         "type": event_type,
         "actor": actor,
         "detail": redact_pii(detail),
+        "operatorId": operator_id,
         **({"runId": run_id} if run_id else {}),
         **({"traceId": trace_id} if trace_id else {}),
     }

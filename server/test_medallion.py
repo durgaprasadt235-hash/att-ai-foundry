@@ -41,9 +41,12 @@ def test_gold_aggregates_match_reconciled_ledger():
     assert snap["gold"]["customers360"] == 20
     assert snap["gold"]["ledgerReconciled"] == 63  # 66 ledger - 3 duplicates
     assert snap["gold"]["ledgerReconciledTotal"] == 2318.95
-    # Gold total equals the raw ledger total minus the quarantined duplicates.
-    raw_total = round(sum(e["amount"] for e in seed["ledger"]), 2)
-    dup_total = round(sum(e["amount"] for e in seed["ledger"]
+    # Gold total equals the signed ledger total minus the quarantined
+    # duplicates. Amounts are positive magnitudes; kind decides the sign
+    # (charge adds, credit/payment subtract) — see signed_ledger_amount.
+    signed = lambda e: e["amount"] if e["kind"] == "charge" else -e["amount"]
+    raw_total = round(sum(signed(e) for e in seed["ledger"]), 2)
+    dup_total = round(sum(signed(e) for e in seed["ledger"]
                           if e["invoice"] in ("INV-2041", "INV-2042", "INV-2043")), 2)
     assert raw_total - dup_total == snap["gold"]["ledgerReconciledTotal"]
     assert snap["gold"]["usageRollup"] == 20

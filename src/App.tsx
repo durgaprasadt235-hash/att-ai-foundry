@@ -10,6 +10,7 @@ import { stateTraceForRun } from './lib/agent';
 import { newAppEvent } from './lib/events';
 import type { AppEvent } from './lib/events';
 import { redactPII } from './lib/redact';
+import { getCurrentOperatorId } from './lib/auth';
 import { SEARCH_RESULT_LIMIT, searchCustomers } from './lib/customer-search';
 import DataView from './components/DataView';
 import { datasetToState, type DatasetTables } from './lib/dataset';
@@ -96,8 +97,13 @@ export default function App() {
   };
   // Audit sink: every entry is PII-redacted here (phone/email masked)
   // and carries its run id, duration and trace id when it belongs to a run.
+  // Staff accountability (backend only): every entry is also tagged with
+  // the operator's login id (operatorId) — see lib/auth.ts. The operator
+  // id is stored in the audit record for backend investigation and is
+  // NEVER rendered on any screen: the Observability audit feed below
+  // shows action / detail / timestamp only.
   const audit = (actor: 'agent' | 'human' | 'system', action: string, detail: string, opts: { runId?: string; durationMs?: number | null; traceId?: string } = {}) => {
-    mutate((s) => ({ ...s, audit: [{ id: uid('AUD'), at: nowIso(), actor, action, detail: redactPII(detail), ...(opts.runId ? { runId: opts.runId } : {}), durationMs: opts.durationMs ?? null, ...(opts.traceId ? { traceId: opts.traceId } : {}) }, ...s.audit].slice(0, 200) }));
+    mutate((s) => ({ ...s, audit: [{ id: uid('AUD'), at: nowIso(), actor, action, detail: redactPII(detail), operatorId: getCurrentOperatorId(), ...(opts.runId ? { runId: opts.runId } : {}), durationMs: opts.durationMs ?? null, ...(opts.traceId ? { traceId: opts.traceId } : {}) }, ...s.audit].slice(0, 200) }));
   };
   // Event feed sink: append-only, redacted at creation (see lib/events.ts).
   const emit = (event: AppEvent) => {
@@ -585,6 +591,14 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { 
       <p className="muted">Where every call starts: find the account, open Customer 360 — the same 360 the agent builds in its RETRIEVE_360 step — then create a case from there. Search by name, phone number, account number, email or customer ID. Synthetic demo data — invented names, accounts and phone numbers. No real PII.</p>
       <div className="row">
         <input className="search" type="text" placeholder="Search name, phone, account, email or customer ID…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
+        <button className="btn" onClick={() => {
+          // Audit the search when it is submitted — never per keystroke,
+          // and never with the raw query: the query may be a phone number
+          // or email, which must not reach the audit log (see lib/redact).
+          // Only the match type and the count are recorded.
+          const reasons = [...new Set(search.results.flatMap((r) => r.reasons))];
+          audit('human', 'customer_search', `Customer search submitted: ${search.total} match${search.total === 1 ? '' : 'es'}${reasons.length > 0 ? ` (matched by ${reasons.join(', ')})` : ' (no match)'}.`);
+        }}>Search</button>
         <button className="btn secondary" onClick={simulateIncomingCall} title="Simulation: picks a customer and pre-fills the search with their phone number, the way dialling 611 identifies the calling line.">Simulate incoming call (611)</button>
       </div>
       <p className="small muted mt">Showing {search.results.length} of {search.total} match{search.total === 1 ? '' : 'es'}{search.capped ? ` — capped at ${SEARCH_RESULT_LIMIT} rows; narrow the search to see more` : ''}.</p>
@@ -597,7 +611,7 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { 
             <td>{c.plan}</td><td>{money(c.balance)}</td>
             <td>{statusPill(c.status)}</td>
             <td><span className="small muted">{reasons.join(', ')}</span></td>
-            <td><button className="btn small secondary" onClick={() => { setSel(c); setShowIntake(false); }}>View 360</button></td>
+            <td><button className="btn small secondary" onClick={() => { setSel(c); setShowIntake(false); audit('human', 'customer_viewed', `Opened Customer 360 for ${c.id} (matched by ${reasons.join(', ')}).`); }}>View 360</button></td>
           </tr>
         ))}</tbody>
       </table></div>
@@ -645,17 +659,6 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { 
           {showIntake && <div className="mt"><CreateCaseForm key={view360.customer.id} customers={state.customers} cases={state.cases} preselectedCustomerId={view360.customer.id} onCreateAndRun={onCreateAndRun} /></div>}
         </div>
       )}
-      <div className="panel mt">
-        <h2>How AT&amp;T finds a customer today</h2>
-        <p className="small">When a customer calls or needs help, AT&amp;T identifies the account before the conversation starts — and this prototype's lookup mirrors that flow:</p>
-        <ul className="small">
-          <li><strong>By phone — 611</strong> from an AT&amp;T wireless phone identifies the calling line automatically. Other lines: wireless <strong>1-800-331-0500</strong>, internet / home phone <strong>1-800-288-2020</strong>, prepaid <strong>1-800-901-9878</strong>, business <strong>1-800-321-2000</strong>.</li>
-          <li><strong>Digital:</strong> the myAT&amp;T app (chat 24/7), live chat at att.com/support, the att.com account, social care at @ATTCares, or in person at an AT&amp;T store.</li>
-          <li><strong>Identifiers:</strong> the calling phone number first; otherwise the account number (top-right of the bill, or bill overview in myAT&amp;T / att.com). An agent can also find the account from just a phone number + name.</li>
-          <li><strong>Verification:</strong> name + phone number first, then the <strong>6-digit account PIN</strong> the customer created. If the customer doesn't have the PIN, the agent asks whether to send a one-time verification code (OTP) to the registered phone or email — but first the customer must confirm the registered email address: the agent checks the email on file against the email the customer says they use. Only if it matches is the OTP sent.</li>
-        </ul>
-        <p className="small muted">In this prototype the lookup above runs against the loaded dataset (the built-in seed or a file uploaded in the Data tab). In production it runs against the CRM through the <code>att</code> datasource adapter — same search box, real systems behind it.</p>
-      </div>
     </section>
   );
 }
@@ -982,7 +985,7 @@ function ObservabilityView({ state, onReset }: { state: AppState; onReset: () =>
         </div>
       ))}
       <h2 className="mt">Audit log ({state.audit.length})</h2>
-      <p className="small muted">Every entry carries its run ID, measured duration, and trace ID when it belongs to a run. Phone numbers and email addresses are masked at the audit sink — they never reach this log.</p>
+      <p className="small muted">Every entry carries its run ID, measured duration, and trace ID when it belongs to a run. Phone numbers and email addresses are masked at the audit sink — they never reach this log. The operator login id is stored on every audit record for backend investigation but is deliberately NOT shown here or on any screen.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Run / Trace</th><th>Duration</th><th>Detail</th></tr></thead>
         <tbody>{state.audit.slice(0, 50).map((a) => <tr key={a.id}><td>{a.at.slice(0, 19).replace('T', ' ')}</td><td>{a.actor}</td><td>{a.action}</td><td className="small">{a.runId ?? '—'}{a.traceId ? <><br /><span className="muted">{a.traceId}</span></> : null}</td><td>{fmtMs(a.durationMs ?? null)}</td><td>{a.detail}</td></tr>)}</tbody>

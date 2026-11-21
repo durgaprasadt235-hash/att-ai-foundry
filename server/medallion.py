@@ -42,6 +42,7 @@ watermark ideas.
 from __future__ import annotations
 
 from engine import find_duplicate, validate_pipeline
+from validate_dataset import signed_ledger_amount
 
 FIX_MAP = {
     "PIPE-01": {"file": "server/engine.py", "fn": "validate_pipeline (PIPE-01 branch)"},
@@ -116,7 +117,7 @@ def build_medallion(state, batch_id):
         "gold": {
             "customers360": len(state["customers"]),
             "ledgerReconciled": len(reconciled),
-            "ledgerReconciledTotal": round(sum(e["amount"] for e in reconciled), 2),
+            "ledgerReconciledTotal": round(sum(signed_ledger_amount(e) for e in reconciled), 2),
             "usageRollup": len(rollup),
             "usageTotalGb": round(sum(u.get("dataGb") or 0 for u in rollup), 2),
             "usageTotalMinutes": sum(u.get("minutes") or 0 for u in rollup),

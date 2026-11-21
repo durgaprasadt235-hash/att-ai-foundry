@@ -28,6 +28,7 @@
 // code paths run at both scales: the demo exercises them on 106 records.
 import type { AppState, MedallionBatchRun, MedallionFailureCard, MedallionLineageStep, MedallionSnapshot, QuarantinedRecord } from './types';
 import { findDuplicate, validatePipeline } from './engine';
+import { signedLedgerAmount } from './dataset';
 
 /** Where to fix a failure, per pipeline. The Copilot prompt points the
  *  operator at exactly this file + function. */
@@ -108,7 +109,7 @@ export function buildMedallion(state: AppState, batchId: string): MedallionSnaps
     gold: {
       customers360: state.customers.length,
       ledgerReconciled: reconciledLedger.length,
-      ledgerReconciledTotal: round2(reconciledLedger.reduce((s, e) => s + e.amount, 0)),
+      ledgerReconciledTotal: round2(reconciledLedger.reduce((s, e) => s + signedLedgerAmount(e), 0)),
       usageRollup: rollupUsage.length,
       usageTotalGb: round2(rollupUsage.reduce((s, u) => s + (u.dataGb ?? 0), 0)),
       usageTotalMinutes: rollupUsage.reduce((s, u) => s + (u.minutes ?? 0), 0),

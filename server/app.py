@@ -89,14 +89,24 @@ _counters: dict[str, int] = {
 _executed_keys: dict[str, dict] = {}
 
 
+# The operator id tagged on every audit entry and event (staff
+# accountability, BACKEND ONLY — never rendered on any screen).
+# Demo mode uses the single labelled id "demo-operator"; in production
+# this resolves to the signed-in operator's Entra ID subject once the
+# OAuth callback exists. Never invent a real person's identity here.
+DEMO_OPERATOR_ID = "demo-operator"
+
+
 def _audit_entry(action: str, detail: str, run_id: str, trace_id: str,
-                 duration_ms: int, actor: str = "agent") -> dict:
+                 duration_ms: int, actor: str = "agent",
+                 operator_id: str = DEMO_OPERATOR_ID) -> dict:
     return {
         "id": f"AUD-{run_id[4:]}",
         "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "actor": actor,
         "action": action,
         "detail": redact_pii(detail),
+        "operatorId": operator_id,
         "runId": run_id,
         "durationMs": duration_ms,
         "traceId": trace_id,

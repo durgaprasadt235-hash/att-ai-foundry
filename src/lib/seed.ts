@@ -1,10 +1,9 @@
 // Synthetic seed data — clearly labelled in the UI as synthetic demo data.
 // Names, accounts, phones and invoices are invented for this demo.
 // Loaded from the user's ChatGPT test data (test-data.json, 2026-11-21).
-// ONE fix applied vs the verbatim file: LED-66 payment amount 35.0 -> -35.0
-// (old-seed convention: payments carry a negative amount; with +35.0 the
-// raw ledger sum for CUST-1007 was $169.64 vs balance $99.64. test-data.json
-// itself is kept verbatim and unmodified.)
+// Ledger amounts are positive magnitudes; kind decides the sign
+// (charge adds, credit/payment subtract) — see signedLedgerAmount in
+// lib/dataset.ts. test-data.json itself is kept verbatim and unmodified.
 import type { AppState } from './types';
 
 export function seedState(): AppState {
@@ -98,7 +97,7 @@ export function seedState(): AppState {
       {"id": "LED-63", "customerId": "CUST-1003", "invoice": "INV-2043", "date": "2026-11-12", "service": "Business Elite — monthly plan", "amount": 112.0, "kind": "charge", "status": "posted"},
       {"id": "LED-64", "customerId": "CUST-1005", "invoice": "INV-3501", "date": "2026-11-11", "service": "International roaming — Canada", "amount": 42.75, "kind": "charge", "status": "posted"},
       {"id": "LED-65", "customerId": "CUST-1006", "invoice": "INV-3502", "date": "2026-11-11", "service": "Late payment fee", "amount": 10.0, "kind": "charge", "status": "posted"},
-      {"id": "LED-66", "customerId": "CUST-1007", "invoice": "INV-3503", "date": "2026-11-12", "service": "Account payment", "amount": -35.0, "kind": "payment", "status": "posted"},
+      {"id": "LED-66", "customerId": "CUST-1007", "invoice": "INV-3503", "date": "2026-11-12", "service": "Account payment", "amount": 35.0, "kind": "payment", "status": "posted"},
     ],
     usage: [
       {"id": "USE-01", "customerId": "CUST-1001", "month": "2026-11", "dataGb": 3.85, "minutes": 141, "sms": 23},
@@ -198,7 +197,7 @@ export function seedState(): AppState {
     pipelineRuns: [],
     evalRuns: [],
     audit: [
-      { id: 'AUD-0001', at: new Date().toISOString(), actor: 'system', action: 'seed', detail: 'Seeded 20 synthetic customers, 66 ledger entries, 12 open cases, 8 policy docs, 3 STAIR knowledge trees (11 leaves).' },
+      { id: 'AUD-0001', at: new Date().toISOString(), actor: 'system', action: 'seed', operatorId: 'demo-operator', detail: 'Seeded 20 synthetic customers, 66 ledger entries, 12 open cases, 8 policy docs, 3 STAIR knowledge trees (11 leaves).' },
     ],
     notifications: [],
   };

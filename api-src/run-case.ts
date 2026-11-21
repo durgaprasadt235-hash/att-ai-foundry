@@ -109,6 +109,9 @@ export default async function handler(req: any, res: any): Promise<void> {
       id: `AUD-${runId.slice(4)}`, at: new Date().toISOString(), actor: 'agent',
       action: plan.failureReason ? 'run_failed' : 'awaiting_approval',
       detail: redactPII(plan.failureReason ?? `Plan proposed for ${c.id}`),
+      // Staff accountability (backend only, never rendered on a screen):
+      // demo mode has no signed-in operator, so the single labelled id.
+      operatorId: 'demo-operator',
       runId, durationMs: Date.now() - t0, traceId,
     },
     note: 'Planning only. A credit is posted only after human approval in the app; this endpoint moves no money.',

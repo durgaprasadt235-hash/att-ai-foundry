@@ -713,6 +713,9 @@ async function handler(req, res) {
         actor: "agent",
         action: plan.failureReason ? "run_failed" : "awaiting_approval",
         detail: redactPII(plan.failureReason ?? `Plan proposed for ${c.id}`),
+        // Staff accountability (backend only, never rendered on a screen):
+        // demo mode has no signed-in operator, so the single labelled id.
+        operatorId: "demo-operator",
         runId,
         durationMs: Date.now() - t0,
         traceId

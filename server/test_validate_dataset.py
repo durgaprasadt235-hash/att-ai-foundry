@@ -80,6 +80,60 @@ def test_balance_mismatch_listed_not_fixed():
     assert data["customers"][0]["balance"] == 999.99
 
 
+def _add_payment_and_credit(data):
+    """Add a positive-amount payment ($20) and credit ($10) for
+    CUST-1001. Amounts are magnitudes; kind decides the sign, so the
+    signed ledger sum for CUST-1001 drops by $30.00 (194.32 -> 164.32)."""
+    data["ledger"].append({
+        "id": "LED-TEST-PAY", "customerId": "CUST-1001",
+        "invoice": "INV-TEST-PAY", "date": "2026-11-13",
+        "service": "Account payment", "amount": 20.00,
+        "kind": "payment", "status": "posted"})
+    data["ledger"].append({
+        "id": "LED-TEST-CR", "customerId": "CUST-1001",
+        "invoice": "INV-TEST-CR", "date": "2026-11-13",
+        "service": "Goodwill credit", "amount": 10.00,
+        "kind": "credit", "status": "posted"})
+
+
+def test_positive_payment_and_credit_pass_d7():
+    # The old validator summed amounts raw and rejected any file where a
+    # payment or credit was stored as a positive amount (373 false D7
+    # errors on a real 1,000-customer file). Kind-based signs must pass.
+    data = _load_seed()
+    _add_payment_and_credit(data)
+    data["customers"][0]["balance"] = 164.32
+    v, tables = validate_dataset(data)
+    assert v["valid"] is True, v["errors"]
+    assert tables is not None
+    assert v["balanceMismatches"] == []
+
+
+def test_genuinely_wrong_balance_still_fails_d7_with_payment_present():
+    data = _load_seed()
+    _add_payment_and_credit(data)
+    # Balance NOT adjusted: stated 194.32, signed ledger sums to 164.32.
+    v, tables = validate_dataset(data)
+    assert v["valid"] is False
+    assert tables is None
+    assert len(v["balanceMismatches"]) == 1
+    assert v["balanceMismatches"][0]["customerId"] == "CUST-1001"
+    assert v["balanceMismatches"][0]["stated"] == 194.32
+    assert v["balanceMismatches"][0]["computed"] == 164.32
+    assert any("D7" in e and "CUST-1001" in e for e in v["errors"])
+
+
+def test_verbatim_test_data_file_passes():
+    # The user's original ChatGPT file (repo root test-data.json) stores
+    # amounts as positive magnitudes with a kind field. It must pass.
+    verbatim = Path(__file__).parent.parent / "test-data.json"
+    data = json.loads(verbatim.read_text())
+    v, tables = validate_dataset(data)
+    assert v["valid"] is True, v["errors"]
+    assert tables is not None
+    assert v["balanceMismatches"] == []
+
+
 def test_case_amount_with_no_ledger_entry_is_a_warning():
     data = _load_seed()
     data["cases"][0]["amount"] = 1234.56

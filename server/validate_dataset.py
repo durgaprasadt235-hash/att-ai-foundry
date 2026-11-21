@@ -21,8 +21,9 @@ Rules (see src/lib/dataset.ts for the full text):
   D5  enums (customer status, ledger kind/status, case type/status,
       usage numbers >= 0)
   D6  every ledger/usage/ticket/case customerId references a known customer
-  D7  balance reconciliation: sum of POSTED ledger amounts (charge +,
-      credit -, payment -) must equal the stated balance within $0.01.
+  D7  balance reconciliation: sum of POSTED ledger amounts (amounts are
+      positive magnitudes; kind decides the sign — charge adds, credit
+      and payment subtract) must equal the stated balance within $0.01.
       Listed, never silently fixed.
   D8  (warning) case amount matches no posted ledger entry for the customer
   D9  (warning) duplicate charges found (same customer/service/amount,
@@ -67,6 +68,18 @@ def _is_num(v) -> bool:
 
 def _money_eq(a: float, b: float) -> bool:
     return abs(a - b) < 0.005
+
+
+def signed_ledger_amount(e) -> float:
+    """The one ledger-sign rule, used by D7 and by Medallion Gold totals.
+
+    Amounts in a file are positive magnitudes; kind decides the sign:
+    a charge adds to what the customer owes, a credit or a payment
+    subtracts. A negative amount in the file is taken as given (so a
+    negative payment would add) — the rule is the kind, not the sign.
+    """
+    amount = e.get("amount") if _is_num(e.get("amount")) else 0
+    return amount if e.get("kind") == "charge" else -amount
 
 
 def find_duplicate_pairs(ledger):
@@ -322,12 +335,13 @@ def validate_dataset(data):
                 f'D6: case {c.get("id")} references unknown customer '
                 f'{c["customerId"]}.')
 
-    # D7 — balance reconciliation (posted entries only; amounts carry sign).
+    # D7 — balance reconciliation (posted entries only; amounts are
+    # positive magnitudes, kind decides the sign — see signed_ledger_amount).
     for c in tables["customers"]:
         if not isinstance(c, dict) or not _is_num(c.get("balance")):
             continue
         computed = sum(
-            e["amount"] for e in tables["ledger"]
+            signed_ledger_amount(e) for e in tables["ledger"]
             if isinstance(e, dict) and e.get("customerId") == c["id"]
             and e.get("status") == "posted" and _is_num(e.get("amount")))
         if abs(computed - c["balance"]) >= 0.01:

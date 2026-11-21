@@ -50,7 +50,7 @@ and replace the rows.
 | Table | Columns |
 |---|---|
 | customers | `id, name, account, phone, email, plan, status, since, balance, city` — status is `active` / `suspended` / `closed` |
-| ledger | `id, customerId, invoice, date, service, amount, kind, status` — kind is `charge` / `credit` / `payment`; status is `posted` / `reversed`; **amounts already carry their sign** (charges positive, credits and payments negative) |
+| ledger | `id, customerId, invoice, date, service, amount, kind, status` — kind is `charge` / `credit` / `payment`; status is `posted` / `reversed`; **amounts are positive magnitudes — kind decides the sign** (charge adds to the balance, credit and payment subtract; D7 reconciles on that rule) |
 | usage | `id, customerId, month, dataGb, minutes, sms` |
 | cases | `id, customerId, type, title, description, amount, status, createdAt, idempotencyKey` — type is `duplicate_charge` / `plan_change` / `roaming_dispute` / `provisioning` / `outage` / `retention` / `other` |
 | tickets | `id, customerId, date, subject, status` — `open` / `resolved` |
@@ -70,7 +70,8 @@ Real customer data must never be in a sample file. Replace, don't just delete:
 - **Keep the relationships**: a case's `customerId` must exist in
   `customers`, a ledger entry's `customerId` must exist too, and every
   customer's **balance must equal the sum of their posted ledger
-  amounts** (charges +, credits −, payments −). The validator checks
+  amounts with kind-based signs** (amounts are positive magnitudes:
+  charges add, credits and payments subtract). The validator checks
   this to the cent and rejects the file if it doesn't reconcile — it
   never silently fixes a balance.
 

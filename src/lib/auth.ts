@@ -63,3 +63,32 @@ export function getAuthStatus(): AuthStatus {
     note: `Auth is enabled for ${cfg.authProvider} (AT&T Entra ID in production). The OAuth callback handler is not yet implemented — sign-in is a placeholder until the fulfilment team wires it (docs/DEPLOYMENT.md step 4).`,
   };
 }
+
+/** Staff accountability — the operator id stamped on every audit entry.
+ *
+ *  The id answers "which login did this?" for backend investigation:
+ *  every search, customer view, case create, agent run, approval,
+ *  rejection, deletion and pipeline/medallion run is written to the
+ *  append-only audit log tagged with this id, so any change to a
+ *  customer or data can be traced to the login that made it.
+ *
+ *  - Demo mode (auth off, the default): a single labelled id,
+ *    "demo-operator". It is a role label, never a real person's identity.
+ *  - Auth enabled but not configured: "unconfigured-operator" — no
+ *    sign-in exists, so no real login can be claimed.
+ *  - Auth enabled and configured: the OAuth callback is NOT yet
+ *    implemented, so no real login exists yet either; the placeholder
+ *    "entra-id:pending-signin" says so. In production this resolves to
+ *    the signed-in operator's Entra ID subject (the `sub` claim from
+ *    the ID token) once the fulfilment team wires the callback
+ *    (docs/DEPLOYMENT.md step 4). Never invent a person's name or
+ *    employee id here.
+ *
+ *  The operator id is BACKEND ONLY: it is stored on the audit record
+ *  and never rendered on any customer-facing screen. */
+export function getCurrentOperatorId(): string {
+  const status = getAuthStatus();
+  if (!status.enabled) return 'demo-operator';
+  if (!status.configured) return 'unconfigured-operator';
+  return 'entra-id:pending-signin';
+}

@@ -898,7 +898,7 @@
       "invoice": "INV-3503",
       "date": "2026-11-12",
       "service": "Account payment",
-      "amount": -35.0,
+      "amount": 35.0,
       "kind": "payment",
       "status": "posted"
     }

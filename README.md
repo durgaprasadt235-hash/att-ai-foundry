@@ -111,12 +111,15 @@ find the account. The Customers view is that lookup:
 - **Simulate incoming call (611)** — picks a customer and pre-fills the
   search with their phone number, the way dialling 611 identifies the
   calling line before the agent speaks. Clearly labelled as a simulation.
-- **How AT&T finds a customer today** — the panel in the Customers view
-  lists the real channels (611, 1-800-331-0500 wireless,
-  1-800-288-2020 internet/home phone, 1-800-901-9878 prepaid,
-  1-800-321-2000 business, myAT&T app, live chat, stores) and the
-  identifiers (calling phone number first, then account number, then
-  name + phone, verified with the 6-digit account PIN the customer created — or, if they don't have it, a one-time code sent to the registered phone/email after the customer confirms the registered email matches).
+- **How AT&T finds a customer today** — documented below: the real
+  channels (611, 1-800-331-0500 wireless, 1-800-288-2020 internet/home
+  phone, 1-800-901-9878 prepaid, 1-800-321-2000 business, myAT&T app,
+  live chat, stores) and the identifiers (calling phone number first,
+  then account number, then name + phone, verified with the 6-digit
+  account PIN the customer created — or, if they don't have it, a
+  one-time code sent to the registered phone/email after the customer
+  confirms the registered email matches). This is documentation, not a
+  working-screen panel — the Customers view stays a working screen.
   In this prototype the lookup runs against the loaded dataset (seed or
   uploaded file); in production it runs against the CRM through the
   `att` datasource adapter.
@@ -126,6 +129,32 @@ searchable the same way as the seed. Verified by the smoke check in
 `tmp/smoke-search.ts` (esbuild-bundled, run with node): "maya",
 "2015550142", "ACC-884120" and "CUST-1001" each find Maya Rodriguez,
 "zzz-no-match" finds nobody, and a 1,000-customer list caps at 50 rows.
+
+## Staff accountability (backend only)
+
+A staff member can look up any customer by name or number while
+working — so if anyone messes with a customer or data, their login
+must be linked to every piece of work they do. Every action is written
+to the append-only audit log tagged with the operator's login id
+(`operatorId` on every audit entry and event): search, viewing a
+Customer 360, creating a case, running the agent, approving or
+rejecting, deleting a customer, loading a dataset, pipeline and
+Medallion runs. Any change to a customer or data can be traced to who
+did it.
+
+- **Backend only, never on the front:** the operator id is stored on
+  the audit record for investigation. It is never shown on any screen —
+  the Observability audit feed shows action, detail and timestamp only.
+- **Search is audited without the query:** the search itself is logged
+  when submitted (never per keystroke) with the match type and count
+  only — the raw query may be a phone number or email, which must never
+  reach the audit log. Opening a Customer 360 is logged with the
+  customer id only.
+- **Operator identity:** demo mode uses the single labelled id
+  `demo-operator` (a role label, never a real person's identity); in
+  production the id comes from the signed-in operator's Entra ID
+  subject (`src/lib/auth.ts`, `getCurrentOperatorId()`), and the audit
+  log is persisted to Postgres with `operatorId` indexed.
 
 ## Bring your own dataset — the first call
 
