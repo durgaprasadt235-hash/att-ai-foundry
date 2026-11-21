@@ -67,6 +67,17 @@ pre.log { background: var(--soft); border: 1px solid var(--line); border-radius:
 .ok { color: var(--green); }
 .search { max-width: 360px; }
 footer { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 10px; font-size: 12px; color: var(--muted); }
+/* InfoTip — small blue circled "i". The bubble shows on hover for
+ * desktop pointers only (touch devices get tap-to-toggle via the
+ * .open class in the component), and on keyboard focus. */
+.info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
+.info-tip-btn { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--accent); background: #fff; color: var(--accent); font-size: 11px; line-height: 14px; font-style: italic; font-weight: 700; padding: 0; cursor: pointer; flex: none; }
+.info-tip-bubble { display: none; position: absolute; top: 21px; left: -6px; width: 250px; max-width: calc(100vw - 32px); background: #111; color: #fff; font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 6px; z-index: 60; box-shadow: 0 4px 14px rgba(0,0,0,.25); text-align: left; white-space: normal; font-weight: 400; }
+@media (hover: hover) and (pointer: fine) {
+  .info-tip:hover .info-tip-bubble,
+  .info-tip-btn:focus-visible + .info-tip-bubble { display: block; }
+}
+.info-tip.open .info-tip-bubble { display: block; }
 @media (max-width: 720px) {
   .cards { grid-template-columns: repeat(3, 1fr); }
   .grid2, .grid3 { grid-template-columns: 1fr; }

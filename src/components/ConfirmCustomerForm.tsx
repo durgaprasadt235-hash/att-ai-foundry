@@ -27,6 +27,7 @@
 import { useState } from 'react';
 import type { Customer } from '../lib/types';
 import { searchCustomers, type CustomerSearchResult } from '../lib/customer-search';
+import InfoTip from './InfoTip';
 
 export type VerificationMethod = 'pin' | 'otp';
 
@@ -147,10 +148,9 @@ export default function ConfirmCustomerForm({ customers, confirmed, onConfirm, o
     return (
       <div className="panel highlight">
         <div className="row space">
-          <span><strong>Verify — {picked.name}</strong> <span className="small muted">{picked.id} · {picked.account} · {picked.phone}{picked.email ? ` · ${picked.email}` : ''} · {picked.plan}</span></span>
+          <span><strong>Verify — {picked.name}</strong> <span className="small muted">{picked.id} · {picked.account} · {picked.phone}{picked.email ? ` · ${picked.email}` : ''} · {picked.plan}</span><InfoTip text="6-digit account PIN first. Without it, a one-time code to the registered phone or email — only after the customer confirms the registered email matches." /></span>
           <button className="btn small secondary" onClick={() => setPicked(null)}>Back to search</button>
         </div>
-        <p className="small muted">6-digit account PIN first; without it, a one-time code to the registered phone/email — only after the customer confirms the registered email matches.</p>
         <div className="row">
           <label style={{ display: 'inline', fontSize: '13px' }}>
             <input type="radio" checked={method === 'pin'} onChange={() => setMethod('pin')} style={{ width: 'auto', marginRight: '6px' }} />
@@ -205,7 +205,7 @@ export default function ConfirmCustomerForm({ customers, confirmed, onConfirm, o
   // ---- Step 1: identify the customer. ----
   return (
     <div className="panel highlight">
-      <h2>Find &amp; confirm customer</h2>
+      <h2>Find &amp; confirm customer <InfoTip text="Identify by name, phone, account, email or ID, then verify from the customer end. The confirmed customer is the context for everything that follows." /></h2>
       <p className="small muted">Search, pick the customer, then verify with the 6-digit PIN, or a one-time code after the registered email is confirmed.</p>
       <div className="row">
         <input

@@ -85,7 +85,7 @@ export default function CreateCaseForm({ customers, cases, onCreateAndRun, prese
   return (
     <div className="panel highlight">
       <h2>Create a case — and run the agent on it</h2>
-      <p className="small muted">A real record: new id, unique idempotency key, created just now. The agent validates, proposes, and waits for your approval — nothing is credited or changed until you approve.</p>
+      <p className="small muted">Nothing is credited or changed until you approve.</p>
       <div className="grid2">
         <div>
           <label>Customer</label>

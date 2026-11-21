@@ -24,6 +24,7 @@
 // seed.
 import { useRef, useState } from 'react';
 import type { AppState } from '../lib/types';
+import InfoTip from './InfoTip';
 import { cleanseSummary, cleanseTables, type CleanseReport } from '../lib/cleanse';
 import {
   CSV_HEADERS,
@@ -86,7 +87,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
         return;
       }
       if (f.size > DATASET_MAX_BYTES) {
-        setError(`"${f.name}" is ${(f.size / 1_000_000).toFixed(1)} MB — datasets over 5 MB are rejected. Bring an anonymised sample, not a production dump.`);
+        setError(`"${f.name}" is ${(f.size / 1_000_000).toFixed(1)} MB — datasets over 5 MB are rejected.`);
         return;
       }
       picked.push({ name: f.name, text: await f.text() });
@@ -168,9 +169,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
     <section>
       <h1>Data — bring your own dataset</h1>
       <p className="small muted">
-        No live connection is needed for a first call. Upload an anonymised sample file, check the
-        validation report, and test with it in minutes — raw data is cleansed automatically and comes
-        out as a production-ready file. See <code>docs/DATASET_GUIDE.md</code>.
+        Upload an anonymised sample file — raw data is cleansed automatically into a production-ready file.
       </p>
 
       <div className="panel">
@@ -183,8 +182,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
           {state.cases.length} cases · {state.docs.length} policy docs · {state.stairTrees.length} STAIR trees
         </p>
         <p className="small muted">
-          Uploaded datasets stay in this browser only — stored in localStorage, never sent to a server,
-          never written into the built-in seed files.
+          Stays in this browser only — never sent to a server.
         </p>
         {datasetSource === 'uploaded' && (
           confirmReset ? (
@@ -199,11 +197,11 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
       </div>
 
       <div className="panel mt">
-        <h2>Upload a dataset</h2>
+        <h2>Upload a dataset <InfoTip text="No live connection is needed for a first call — test with a sample in minutes." /></h2>
         <p className="small muted">
-          One <strong>.json</strong> file (same shape as <code>test-data.json</code>), or one <strong>.csv</strong> per
-          table: <code>customers.csv</code>, <code>ledger.csv</code>, <code>usage.csv</code>, <code>cases.csv</code>{' '}
-          (required) and <code>tickets.csv</code> (optional). Policy docs and STAIR trees are JSON-only.
+          One <strong>.json</strong> file, or one <strong>.csv</strong> per table — <code>customers.csv</code>,{' '}
+          <code>ledger.csv</code>, <code>usage.csv</code>, <code>cases.csv</code> (required) and{' '}
+          <code>tickets.csv</code> (optional). Policy docs and STAIR trees are JSON-only.
         </p>
         <input
           ref={inputRef}
@@ -225,8 +223,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
               {validation.counts.stairTrees} STAIR trees
             </p>
             <p className="small muted">
-              A pre-check, not a gate: a file with errors is accepted raw and cleansed on load.
-              Every correction and quarantine is listed below; the raw file is never modified.
+              A pre-check, not a gate — files with errors are accepted raw and cleansed on load. The raw file is never modified.
             </p>
             {validation.errors.length > 0 && (
               <div>
@@ -258,15 +255,10 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
                 <button className="btn mt" onClick={loadCleanse}>
                   Load raw &amp; cleanse automatically
                 </button>
-                <p className="small muted">
-                  Loads the cleansed dataset. Dashboard, Cases and Search all run on the cleansed data.
-                </p>
               </div>
             ) : (
               <p className="small muted">
-                This file cannot be cleansed automatically — it is structurally unusable (a required
-                table is missing, or the file could not be parsed). Nothing was loaded. Fix the
-                structure and upload again.
+                Cannot be cleansed — a required table is missing or the file could not be parsed. Nothing was loaded.
               </p>
             )}
           </div>
@@ -285,12 +277,9 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
               {cleanseReport.cleansedCounts.usage} usage records · {cleanseReport.cleansedCounts.cases} cases
             </p>
             <p className="small">
-              <strong>{cleanseReport.corrected.length} balance correction(s)</strong> — the ledger is the
-              source of truth.{' '}
-              <strong>{cleanseReport.quarantined.length} record(s) quarantined</strong> — listed with reasons,
-              never deleted from your raw file.{' '}
-              <strong>{cleanseReport.notes.length} note(s)</strong> — kept as-is (duplicates, suspended
-              accounts, zero-amount entries).
+              <strong>{cleanseReport.corrected.length} balance correction(s)</strong> ·{' '}
+              <strong>{cleanseReport.quarantined.length} record(s) quarantined</strong> ·{' '}
+              <strong>{cleanseReport.notes.length} note(s)</strong> kept as-is.
             </p>
             {cleanseReport.corrected.length > 0 && (
               <div>
@@ -323,7 +312,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
               </div>
             )}
             <p className="small">
-              The cleansed dataset passed validation with 0 errors — download it as the production-ready file.
+              Passed validation with 0 errors.
             </p>
             <div className="row">
               <button
@@ -349,8 +338,7 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
       <div className="panel mt">
         <h2>Download a template</h2>
         <p className="small muted">
-          A small example that already passes validation (3 customers, 1 duplicate charge, 1 case) —
-          replace the rows with your own anonymised sample.
+          A small example that passes validation — replace the rows with your own sample.
         </p>
         <div className="row">
           <button className="btn small secondary" onClick={() => download('dataset-template.json', templateDatasetJson(), 'application/json')}>dataset-template.json</button>
@@ -358,10 +346,6 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
             <button key={t} className="btn small secondary" onClick={() => download(`${t}.csv`, templateCsv(t), 'text/csv')}>{t}.csv</button>
           ))}
         </div>
-        <p className="small muted">
-          How to prepare a sample: <code>docs/DATASET_GUIDE.md</code> — what columns to export, how to
-          anonymise names and phones, and what a good first-call sample looks like.
-        </p>
       </div>
     </section>
   );

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentRun, AppState, Case, Customer, PolicyDoc } from './lib/types';
 import { AGENT_COST_USD, EVAL_GATE_PCT, MANUAL_COST_USD, MANUAL_MINUTES, OUTAGE_CREDIT_USD, RETENTION_CREDIT_USD } from './lib/types';
 import { applyCredit, creditAlreadyApplied, customer360, dashboard, evalScore, findDuplicate, groundedAnswer, planRun, runEvalSuite, validatePipeline } from './lib/engine';
-import { MEDALLION_BATCH_LIMIT, buildMedallion, defaultBatchId, lineageForRecord, runMedallionBatch } from './lib/medallion';
+import { buildMedallion, defaultBatchId, lineageForRecord, runMedallionBatch } from './lib/medallion';
 import type { MedallionBatchRun } from './lib/types';
 import { fmtMin, fmtMs, loadState, money, resetState, saveState, uid } from './lib/store';
 import { autoTocFromDoc, measureChunkRagEval, measureStairEval, stairAnswer, stairRetrieve } from './lib/stair';
@@ -15,6 +15,7 @@ import { SEARCH_RESULT_LIMIT, searchCustomers } from './lib/customer-search';
 import DataView from './components/DataView';
 import CreateCaseForm from './components/CreateCaseForm';
 import ConfirmCustomerForm, { formatVerifiedAt, verificationLabel, type CustomerConfirmation, type VerificationMethod } from './components/ConfirmCustomerForm';
+import InfoTip from './components/InfoTip';
 
 /** Shape of GET /api/health (mirrors api/health.ts + server/app.py). The
  *  frontend reads config/datasource/LLM/auth status from here — the
@@ -352,7 +353,7 @@ export default function App() {
           <div className="wrap">
             <div className="panel highlight mt">
               <h1>Sign-in is not available</h1>
-              <p>Authentication is enabled but <strong>not configured</strong> — missing {auth.missing.join(', ')}. This is not a login screen: there is no demo account and no way to sign in until the fulfilment team registers the app with {auth.provider} (AT&amp;T Entra ID in production) and sets the missing variables. See docs/DEPLOYMENT.md step 4.</p>
+              <p>Sign-in is not available — authentication is enabled but <strong>not configured</strong> (missing {auth.missing.join(', ')}). Register the app with {auth.provider} and set the missing variables.</p>
               <p className="small muted">{auth.note}</p>
             </div>
           </div>
@@ -365,8 +366,8 @@ export default function App() {
         <div className="wrap">
           <div className="panel highlight mt">
             <h1>Sign in with {auth.provider}</h1>
-            <p>Authentication is enabled for {auth.provider} (AT&amp;T Entra ID in production). The OAuth callback handler is not yet implemented, so sign-in is a placeholder for now.</p>
-            <button className="btn accent" disabled title="OAuth callback not yet implemented — see docs/DEPLOYMENT.md step 4">Sign in with {auth.provider} (not yet wired)</button>
+            <p>OAuth callback not implemented yet — sign-in is not available.</p>
+            <button className="btn accent" disabled title="OAuth callback not yet implemented">Sign in with {auth.provider} (not yet wired)</button>
             <p className="small muted mt">{auth.note}</p>
           </div>
         </div>
@@ -412,7 +413,7 @@ export default function App() {
         {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} onCreateAndRun={createCaseAndRun} />}
         {view === 'system' && <SystemView state={state} mutate={mutate} audit={audit} emit={emit} onReset={() => { const fresh = resetState(); setState(fresh); stateRef.current = fresh; setNotice('Demo data reset to the seeded state.'); }} />}
         <footer>
-          Honest about what is live: frontend ↔ serverless API ↔ agent engine ↔ data store are live-connected inside this prototype, analytics are computed live from real runs, LangGraph-style code is real Python in server/, and RAG/STAIR retrieval is real over seeded policy docs. Live Groq (openai/gpt-oss-120b) runs only when GROQ_API_KEY is set — otherwise the agent is deterministic and says so. There is no real AT&amp;T internal API, and all demo data is synthetic. Every step is traced to a ledger record or a cited policy section. Manual baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case (POL-005). Agent cost {money(AGENT_COST_USD)} per run is a stated demo assumption, not a measured cloud bill.
+          Demo: no real AT&amp;T API; all data is synthetic. Groq runs only when GROQ_API_KEY is set, otherwise the agent is deterministic. Baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case; agent cost {money(AGENT_COST_USD)} per run is a demo assumption, not a measured bill.
         </footer>
       </div>
     </div>
@@ -434,7 +435,7 @@ function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, 
         <div className="card"><div className="num">{dash.creditsIssued ? money(dash.creditsIssued) : '—'}</div><div className="lbl">Credits issued</div></div>
         <div className="card"><div className="num">{dash.casesOpen}</div><div className="lbl">Cases open</div></div>
       </div>
-      {dash.runs === 0 && <div className="notice">No runs yet — the numbers above show “—” rather than a fake 100%. Create a case above to see real, measured outcomes.</div>}
+      {dash.runs === 0 && <div className="notice">No runs yet.</div>}
       <ProductionReadinessPanel health={health} state={state} />
       <div className="panel">
         <h2>Recent runs</h2>
@@ -445,7 +446,7 @@ function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, 
           </div>
         ))}
         <h2 className="mt">Notifications sent</h2>
-        {state.notifications.length === 0 ? <p className="muted small">None yet — a notification is created only when a credit is actually posted.</p> : state.notifications.slice(0, 3).map((n) => <p key={n.id} className="small">{n.message}</p>)}
+        {state.notifications.length === 0 ? <p className="muted small">None yet.</p> : state.notifications.slice(0, 3).map((n) => <p key={n.id} className="small">{n.message}</p>)}
       </div>
     </section>
   );
@@ -468,13 +469,13 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
       label: 'Config — GROQ_API_KEY',
       tone: !health ? '' : health.llm_configured ? 'green' : 'amber',
       status: !health ? 'unknown — API unreachable in local dev' : health.llm_configured ? 'set' : 'not set',
-      detail: !health ? 'Start the API or deploy to check.' : health.llm_configured ? 'Live-LLM mode available.' : 'Deterministic engine only — the demo still runs and says so.',
+      detail: !health ? 'Start the API or deploy to check.' : health.llm_configured ? 'Live-LLM mode available.' : 'Deterministic engine only.',
     },
     {
       label: 'LLM — live Groq call',
       tone: !health ? '' : health.llm_live ? 'green' : health.llm_configured ? 'amber' : 'amber',
       status: !health ? 'unknown' : health.llm_live ? `live (${health.llmModel})` : health.llm_configured ? 'key set, live call not yet verified' : 'off — deterministic',
-      detail: !health ? '' : health.llm_live ? `A real Groq call succeeded (probe, cached 60s). Circuit: ${health.llm_circuit}.` : health.llm_configured ? 'The key is configured but no live call has succeeded yet — run a case with live LLM to verify.' : 'No key. The agent is deterministic code and every trace says so.',
+      detail: !health ? '' : health.llm_live ? `A real Groq call succeeded (probe, cached 60s). Circuit: ${health.llm_circuit}.` : health.llm_configured ? 'Run a case with live LLM to verify.' : 'No key — deterministic engine.',
     },
     {
       label: 'Datasource',
@@ -498,7 +499,7 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
       label: 'Last eval suite',
       tone: !lastEval ? 'amber' : lastEval.passed ? 'green' : 'red',
       status: !lastEval ? 'not run yet' : `${lastEval.scorePct}% — ${lastEval.passed ? 'PASS' : 'FAIL'} (gate ${lastEval.gatePct}%)`,
-      detail: !lastEval ? 'Run the suite in Evaluations — the release gate blocks on it.' : lastEval.passed ? 'Release gate would pass on this result.' : 'Release gate BLOCKS on this result — see the failed checks in Evaluations.',
+      detail: !lastEval ? 'Run the suite in System → Evaluations.' : lastEval.passed ? 'Release gate would pass on this result.' : 'Release gate blocks — see failed checks in Evaluations.',
     },
     {
       label: 'Medallion',
@@ -508,12 +509,12 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
     },
   ];
   const todos: string[] = [];
-  if (health && !health.llm_configured) todos.push('Set GROQ_API_KEY for live-LLM mode (or keep the deterministic engine — it is a real mode, not a gap).');
-  if (health && health.datasource.mode === 'seed') todos.push('Connect ATT_API_BASE_URL + ATT_API_KEY and set DATASOURCE=att for live AT&T data — the adapter fails honestly until then, never fakes it.');
+  if (health && !health.llm_configured) todos.push('Set GROQ_API_KEY for live-LLM mode.');
+  if (health && health.datasource.mode === 'seed') todos.push('Connect ATT_API_BASE_URL + ATT_API_KEY and set DATASOURCE=att for live AT&T data.');
   if (health && !health.db.configured) todos.push('Provision Postgres and set DATABASE_URL when the fulfilment team wires the store (reserved today).');
   if (health && !health.auth.enabled) todos.push('Register the Entra ID app and set AUTH_ENABLED=true + AUTH_CLIENT_ID + AUTH_ISSUER_URL when login is required.');
-  if (!lastEval) todos.push('Run the evaluation suite (System → Evaluations) — no release is approved without a passing 85% gate.');
-  if (health?.datasource.mode === 'att' && health.datasource.status !== 'configured') todos.push('att mode is selected but its connection vars are missing — data loads will fail honestly until they are set.');
+  if (!lastEval) todos.push('Run the evaluation suite (System → Evaluations).');
+  if (health?.datasource.mode === 'att' && health.datasource.status !== 'configured') todos.push('att mode selected but its connection vars are missing.');
   const jd: { n: number; label: string; tone: 'green' | 'amber' | 'blue'; status: string }[] = [
     { n: 1, label: 'Production Python + FastAPI (api/ ↔ server/ mirrors)', tone: 'green', status: 'live' },
     { n: 2, label: 'Agentic workflows — explicit state machine + trace', tone: 'green', status: 'live' },
@@ -533,12 +534,11 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
   return (
     <div className="panel mt">
       <div className="row space">
-        <span><strong>Production readiness</strong> <span className="small muted">· {readyCount} of {rows.length} checks green · {todoCount} fulfilment item{todoCount === 1 ? '' : 's'} open{!lastEval ? ' · evals not run yet' : ''}</span></span>
+        <span><strong>Production readiness</strong> <span className="small muted">· {readyCount} of {rows.length} checks green · {todoCount} fulfilment item{todoCount === 1 ? '' : 's'} open{!lastEval ? ' · evals not run yet' : ''}</span><InfoTip text="Every row is computed live from /api/health, the last eval run, and the Medallion snapshot." /></span>
         <button className="btn small secondary" onClick={() => setOpen((v) => !v)}>{open ? 'Hide details' : 'Show details'}</button>
       </div>
       {open && (
       <>
-      <p className="small muted">Every row is computed from /api/health, the last eval run, or the Medallion snapshot — not claimed. See docs/JD_COVERAGE.md for the full JD mapping.</p>
       {rows.map((r) => (
         <div key={r.label} className="row space" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
           <span className="small"><strong>{r.label}</strong><br /><span className="muted">{r.detail}</span></span>
@@ -560,7 +560,6 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
             <Pill tone={j.tone}>{j.status}</Pill>
           </div>
         ))}
-        <p className="small muted mt">Full mapping — file, how to verify, and what is honestly still missing — in docs/JD_COVERAGE.md.</p>
       </div>
       </>
       )}
@@ -606,7 +605,7 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun, conf
   return (
     <section>
       <h1>Find a customer</h1>
-      <p className="small muted">Search below, or find &amp; confirm above. Synthetic demo data — no real PII.</p>
+      <p className="small muted">Demo data — no real customer records.</p>
       <ConfirmCustomerForm key={confirmed ? confirmed.customerId : 'none'} customers={state.customers} confirmed={confirmed} onConfirm={(customer, method) => { onConfirmCustomer(customer, method); setSel(customer); setShowIntake(false); }} onClear={() => { onClearConfirmation(); setSel(null); setShowIntake(false); }} audit={audit} />
       <div className="row">
         <input className="search" type="text" placeholder="Search name, phone, account, email or customer ID…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
@@ -657,7 +656,7 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun, conf
           {confirmed && confirmed.customerId === view360.customer.id ? (
             <p className="small ok">Verified via {verificationLabel(confirmed.method)} at {formatVerifiedAt(confirmed.at)} — this session. Changes below apply to this customer.</p>
           ) : (
-            <p className="small error">Not verified — verify before changing billing, usage or services. Use “Find &amp; confirm customer” at the top of this view. (Verification is recorded, not enforced yet — see README.md / docs/PRD.md.)</p>
+            <p className="small error">Not verified — verify before changing billing, usage or services. Verification is recorded, not enforced yet.</p>
           )}
           <div className="grid3">
             <div><h3>Billing ledger</h3>{view360.ledger.length === 0 ? <p className="muted small">No entries.</p> : view360.ledger.map((e) => <p key={e.id} className="small">{e.date} · {e.invoice} · {e.service} · <strong>{money(e.amount)}</strong> · {e.status}</p>)}</div>
@@ -699,7 +698,7 @@ function CasesView({ state, onRun, onApprove, onReject, onCreateAndRun }: {
   return (
     <section>
       <h1>Cases</h1>
-      <p className="small muted">Run the agent on a case — it proposes, then waits for your approval. Approving posts a real credit to the ledger.</p>
+      <p className="small muted">Approving posts a real credit to the ledger.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Case</th><th>Customer</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>{state.cases.map((c) => {
@@ -796,7 +795,7 @@ function KnowledgeView({ state, mutate, audit }: { state: AppState; mutate: (fn:
   return (
     <section>
       <h1>Knowledge</h1>
-      <p className="small muted">The policy knowledge the agent grounds itself in — answers come only from these docs, with citations, and refuse when not in the docs.</p>
+      <p className="small muted">Answers come only from these docs — anything else is refused.</p>
       <nav className="subtabs">
         <button className={tab === 'docs' ? 'active' : ''} onClick={() => setTab('docs')}>Policy docs (RAG)</button>
         <button className={tab === 'stair' ? 'active' : ''} onClick={() => setTab('stair')}>STAIR</button>
@@ -827,8 +826,7 @@ function PipelinesView({ state, mutate, audit, emit }: { state: AppState; mutate
   };
   return (
     <section>
-      <h1>Pipelines</h1>
-      <p className="small muted">ETL runs validate the seeded batch and count what passed or failed. Exceptions are listed, not hidden. These are the Medallion Silver quality gates — see System → Medallion for Bronze → Silver → Gold, quarantine, and lineage.</p>
+      <h1>Pipelines <InfoTip text="ETL runs validate the seeded batch and count passed and failed. These are the Medallion Silver quality gates." /></h1>
       <div className="table-wrap"><table>
         <thead><tr><th>Pipeline</th><th>Source → Destination</th><th>Last run</th><th></th></tr></thead>
         <tbody>{state.pipelines.map((p) => (
@@ -870,24 +868,22 @@ function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' |
   };
   return (
     <section>
-      <h1>Medallion — Bronze → Silver → Gold</h1>
-      <p className="small muted">One operator runs the whole platform: a failure is fixed with the Copilot prompt on its card — no 5–6 person team. Bad records go to quarantine, never silently dropped; Gold is rebuilt from Silver, never edited directly.</p>
+      <h1>Medallion — Bronze → Silver → Gold <InfoTip text="Bronze = Silver passed + quarantined. Gold is built only from Silver-passed records — never edited directly." /></h1>
       <div className="cards">
         <div className="card"><div className="num">{snapshot.bronzeTotal}</div><div className="lbl">Bronze — raw as received</div></div>
         <div className="card"><div className="num">{snapshot.silverPassed}</div><div className="lbl">Silver — passed · {snapshot.silverQuarantined} quarantined</div></div>
         <div className="card"><div className="num">{snapshot.gold.ledgerReconciled}</div><div className="lbl">Gold — reconciled ledger · ${snapshot.gold.ledgerReconciledTotal.toFixed(2)}</div></div>
         <div className="card"><div className="num">{snapshot.gold.customers360}</div><div className="lbl">Gold — Customer 360 · {snapshot.gold.usageTotalGb} GB</div></div>
       </div>
-      <p className="small muted">Reconciliation: Bronze {snapshot.bronzeTotal} = Silver passed {snapshot.silverPassed} + quarantined {snapshot.silverQuarantined}. Gold is built only from Silver-passed records.</p>
       <div className="row">
         <button className="btn accent" onClick={runBatch}>Run incremental batch</button>
-        <span className="small muted">First run processes {snapshot.bronzeTotal} records; run it again and the watermark skips them all — 0 new, {snapshot.bronzeTotal} skipped. A failed step is retried once, then quarantined — the batch never fails outright.</span>
+        <span className="small muted">Failed steps retry once, then quarantine — the batch never fails outright.</span>
       </div>
       {runs.length > 0 && runs.slice(0, 3).map((r) => (
         <div key={`${r.batchId}-${r.newRecords}-${runs.indexOf(r)}`} className="panel">
           <div className="row space"><strong>Batch {r.batchId}</strong><span className="small muted">{r.newRecords} new · {r.skippedRecords} skipped by watermark · {r.retries} retries · {r.deferredRecords} deferred to the next batch</span></div>
           <p className="small">Bronze {r.snapshot.bronzeTotal} = Silver passed {r.snapshot.silverPassed} + quarantined {r.snapshot.silverQuarantined} · Gold ledger {r.snapshot.gold.ledgerReconciled} entries, ${r.snapshot.gold.ledgerReconciledTotal.toFixed(2)}</p>
-          {r.deferredRecords > 0 && <p className="small muted">Backpressure: the batch is bounded at {MEDALLION_BATCH_LIMIT} new records — the {r.deferredRecords} deferred records stay un-watermarked and are picked up by the next batch, never dropped.</p>}
+          {r.deferredRecords > 0 && <p className="small muted">Deferred: {r.deferredRecords} records — picked up by the next batch.</p>}
         </div>
       ))}
       <h2 className="mt">Quarantine ({snapshot.quarantine.length}) — listed, never silently dropped</h2>
@@ -909,8 +905,8 @@ function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' |
           </div>
         ))}
       </div>
-      <h2 className="mt">Failure cards — one operator + Copilot</h2>
-      <p className="small muted">What failed, the exact record and batch, the error, and a ready-to-paste Copilot prompt. Fix in Bronze/Silver, re-run the batch — never edit Gold directly.</p>
+      <h2 className="mt">Failure cards — one operator + Copilot <InfoTip text="One operator fixes failures with the Copilot prompt on each card." /></h2>
+      <p className="small muted">Fix in Bronze/Silver, re-run the batch — never edit Gold directly.</p>
       {snapshot.failureCards.map((card) => (
         <div key={card.id} className="panel">
           <div className="row space"><strong>{card.id}</strong><span className="small muted">{card.pipelineId} · batch {card.batchId}</span></div>
@@ -920,7 +916,7 @@ function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' |
           <button className="btn small secondary" onClick={() => copyPrompt(card.id, card.copilotPrompt)}>{copiedId === card.id ? 'Copied — paste it into Copilot' : 'Copy Copilot prompt'}</button>
         </div>
       ))}
-      <p className="small muted mt">Scale, honestly: this demo runs on the 20-customer synthetic seed (106 records). Petabyte scale is architectural, not measured here. See docs/OPERATOR_RUNBOOK.md for the 1-person operations guide.</p>
+      <p className="small muted mt">Demo data: 20 customers, 106 records. Petabyte scale is architectural, not measured here.</p>
     </section>
   );
 }
@@ -940,7 +936,7 @@ function RagView({ state, mutate, audit }: { state: AppState; mutate: (fn: (s: A
   };
   return (
     <section>
-      <p className="small muted">Answers come only from the indexed policy docs, with citations. If the answer is not in the docs, the system refuses instead of guessing.</p>
+      <p className="small muted">Answers come only from these docs — anything else is refused.</p>
       <div className="row"><input className="search" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask about a policy…" /><button className="btn" onClick={() => search(q)}>Search</button></div>
       {answer && (
         <div className="panel mt">
@@ -1011,8 +1007,8 @@ function EvalsView({ state, mutate, audit, emit }: { state: AppState; mutate: (f
   };
   return (
     <section>
-      <h1>Evaluations</h1>
-      <p className="small muted">8 checks: duplicate detection, amount, non-duplicate discrimination, RAG grounding, RAG refusal, idempotency, and the agent plan. Release gate: {EVAL_GATE_PCT}%. The suite runs against live state — delete POL-001 and it fails.</p>
+      <h1>Evaluations <InfoTip text="8 checks: duplicate detection, amount, non-duplicate discrimination, RAG grounding and refusal, idempotency, agent plan." /></h1>
+      <p className="small muted">Release gate: {EVAL_GATE_PCT}%. Runs against live state.</p>
       <div className="row">
         <button className="btn" onClick={runSuite}>Run evaluation suite</button>
         <button className="btn accent" onClick={requestRelease}>Request release</button>
@@ -1023,7 +1019,7 @@ function EvalsView({ state, mutate, audit, emit }: { state: AppState; mutate: (f
           <div className="row space"><strong>{release.status === 'approved' ? 'Release approved' : 'Release blocked'}</strong>{release.status === 'approved' ? <Pill tone="green">approved</Pill> : <Pill tone="red">blocked</Pill>}</div>
           <p className="small">{release.reason}</p>
           {release.failures.map((f) => <p key={f} className="small error">Failed: {f}</p>)}
-          {release.status === 'blocked' && <p className="small muted">Fix the failed checks (or restore the state they depend on) and re-run the suite. The release stays blocked until the gate passes.</p>}
+          {release.status === 'blocked' && <p className="small muted">Fix the failed checks and re-run the suite.</p>}
         </div>
       )}
       {state.evalRuns.map((er) => (
@@ -1046,8 +1042,7 @@ function EvalsView({ state, mutate, audit, emit }: { state: AppState; mutate: (f
 function ObservabilityView({ state, onReset }: { state: AppState; onReset: () => void }) {
   return (
     <section>
-      <h1>Observability</h1>
-      <p className="small muted">Every agent step with measured timing, every pipeline run, and every action in the audit log. Nothing is reported that was not measured.</p>
+      <h1>Observability <InfoTip text="Every agent step with measured timing, every pipeline run, every action in the audit log. Nothing is reported that was not measured." /></h1>
       <h2>Agent runs</h2>
       {state.runs.length === 0 ? <p className="muted">No runs yet.</p> : state.runs.map((r) => (
         <div key={r.id} className="panel">
@@ -1057,14 +1052,13 @@ function ObservabilityView({ state, onReset }: { state: AppState; onReset: () =>
         </div>
       ))}
       <h2 className="mt">Audit log ({state.audit.length})</h2>
-      <p className="small muted">Phone/email are masked at the audit sink. The operator login id is stored on every record for backend investigation and is never shown here.</p>
+      <p className="small muted">Phone/email masked. Operator login is stored, never shown here.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Run / Trace</th><th>Duration</th><th>Detail</th></tr></thead>
         <tbody>{state.audit.slice(0, 50).map((a) => <tr key={a.id}><td>{a.at.slice(0, 19).replace('T', ' ')}</td><td>{a.actor}</td><td>{a.action}</td><td className="small">{a.runId ?? '—'}{a.traceId ? <><br /><span className="muted">{a.traceId}</span></> : null}</td><td>{fmtMs(a.durationMs ?? null)}</td><td>{a.detail}</td></tr>)}</tbody>
       </table></div>
-      <h2 className="mt">Event feed ({(state.events ?? []).length}) — append-only</h2>
-      <p className="small muted">Append-only — the seam where a real event bus (Kafka / SNS / EventBridge) plugs in.</p>
-      {(state.events ?? []).length === 0 ? <p className="muted">No events yet — run a case, create a case, or run a pipeline.</p> : (
+      <h2 className="mt">Event feed ({(state.events ?? []).length}) — append-only <InfoTip text="Append-only — the seam where a real event bus (Kafka / SNS / EventBridge) plugs in." /></h2>
+      {(state.events ?? []).length === 0 ? <p className="muted">No events yet.</p> : (
         <div className="table-wrap"><table>
           <thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Run / Trace</th><th>Detail</th></tr></thead>
           <tbody>{(state.events ?? []).slice(0, 50).map((e) => <tr key={e.id}><td>{e.at.slice(0, 19).replace('T', ' ')}</td><td>{e.type}</td><td>{e.actor}</td><td className="small">{e.runId ?? '—'}{e.traceId ? <><br /><span className="muted">{e.traceId}</span></> : null}</td><td>{e.detail}</td></tr>)}</tbody>
@@ -1072,7 +1066,7 @@ function ObservabilityView({ state, onReset }: { state: AppState; onReset: () =>
       )}
       <div className="panel mt">
         <h2>Reset demo</h2>
-        <p className="small muted">Restores the seeded synthetic state (20 customers, 12 open cases, 8 policy docs) and clears all runs, credits and audit entries.</p>
+        <p className="small muted">Restores the seeded state and clears runs, credits and audit entries.</p>
         <ConfirmButton label="Reset demo data" confirmLabel="Confirm reset" kind="danger" onConfirm={onReset} />
       </div>
     </section>
@@ -1092,7 +1086,7 @@ function StairView({ state }: { state: AppState }) {
   };
   return (
     <section>
-      <p className="small muted">IBM Research (Kumar et al., arXiv 2609.03874). No chunking, no embeddings, no vector DB — docs are structured trees; retrieval navigates the TOC to the exact leaf and answers only from that leaf, intact.</p>
+      <p className="small muted">No chunking, no embeddings — the exact section is returned intact.<InfoTip text="IBM Research STAIR (Kumar et al., arXiv 2609.03874). Docs are structured trees; retrieval navigates the TOC to the exact leaf." /></p>
       <div className="row"><input className="search" type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask about a policy…" /><button className="btn" onClick={() => runQuery(q)}>Retrieve</button></div>
       {trace && (
         <div className="panel highlight mt">
@@ -1111,13 +1105,12 @@ function StairView({ state }: { state: AppState }) {
           <p>STAIR Recall@1: <strong>{evalResult.recallAt1}%</strong> ({evalResult.correct}/{evalResult.total})</p>
           <p>STAIR invalid-section rate: <strong>{evalResult.invalidRate}%</strong> ({evalResult.invalidSections} invalid sections)</p>
           <p>Chunk-RAG baseline Recall@1: <strong>{chunkEval.recallAt1}%</strong> ({chunkEval.correct}/{chunkEval.total})</p>
-          <p className="small muted">These are our own measured numbers on this demo's 10-query eval set, computed live from the code — not paper numbers.</p>
+          <p className="small muted">Measured live on this demo's 10-query set.</p>
         </div>
         <div className="panel">
-          <h2>Paper numbers (IBM STAIR, arXiv 2609.03874)</h2>
+          <h2>Paper numbers (IBM STAIR, arXiv 2609.03874) <InfoTip text="No “65x reduction” figure is claimed — it is not a verified fact." /></h2>
           <p>Recall@1 on SearchTome: STAIR 82.6%, DSI 76.9%, DPR 68.7%, BM25 59.5%.</p>
-          <p>Hallucination &lt; 0.05% in the paper means generating an <strong>invalid section identifier</strong> — not “the answer was factually right”. Do not read it as general accuracy.</p>
-          <p className="small muted">No “65x reduction” figure is claimed anywhere in this app — it is not stated as a verified fact.</p>
+          <p>Paper “hallucination &lt; 0.05%” means an invalid section identifier — not general accuracy.</p>
         </div>
       </div>
       <h2>Side-by-side comparison</h2>
@@ -1142,11 +1135,11 @@ function StairView({ state }: { state: AppState }) {
       ))}
       <div className="panel">
         <h2>Docs without a TOC</h2>
-        <p className="small muted">A plain policy doc with no headings gets an auto-generated TOC (one section per sentence), flagged as auto-generated. If no heading or section matches a query, the answer is “not found in policy” instead of a guess. Example — auto TOC for POL-005:</p>
+        <p className="small muted">Docs without headings get an auto-generated TOC. No match means “not found in policy”, not a guess. Example — auto TOC for POL-005:</p>
         <p className="small">{autoTocFromDoc(state.docs.find((d) => d.id === 'POL-005') ?? state.docs[0]).leaves.map((l) => l.path).join(' · ')}</p>
       </div>
       <h2 className="mt">Per-query eval detail — STAIR vs chunk-RAG baseline (10 queries)</h2>
-      <p className="small muted">Same 10 questions, same expected answers. STAIR must return the exact leaf; the baseline is credited only when its top doc is the doc that contains the answer. This is the honest comparison — no paper numbers.</p>
+      <p className="small muted">Same 10 questions, same expected answers.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Query</th><th>Expected leaf</th><th>STAIR got</th><th>STAIR</th><th>Chunk baseline got (doc)</th><th>Chunk</th></tr></thead>
         <tbody>{evalResult.perQuery.map((r, i) => {
