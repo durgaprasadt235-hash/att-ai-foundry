@@ -2,10 +2,31 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentRun, AppState, Case, Customer, PolicyDoc } from './lib/types';
 import { AGENT_COST_USD, EVAL_GATE_PCT, MANUAL_COST_USD, MANUAL_MINUTES, OUTAGE_CREDIT_USD, RETENTION_CREDIT_USD } from './lib/types';
 import { applyCredit, creditAlreadyApplied, customer360, dashboard, evalScore, findDuplicate, groundedAnswer, planRun, runEvalSuite, validatePipeline } from './lib/engine';
-import { buildMedallion, defaultBatchId, lineageForRecord, runMedallionBatch } from './lib/medallion';
+import { MEDALLION_BATCH_LIMIT, buildMedallion, defaultBatchId, lineageForRecord, runMedallionBatch } from './lib/medallion';
 import type { MedallionBatchRun } from './lib/types';
 import { fmtMin, fmtMs, loadState, money, resetState, saveState, uid } from './lib/store';
 import { autoTocFromDoc, measureChunkRagEval, measureStairEval, stairAnswer, stairRetrieve } from './lib/stair';
+import { stateTraceForRun } from './lib/agent';
+import { newAppEvent } from './lib/events';
+import type { AppEvent } from './lib/events';
+import { redactPII } from './lib/redact';
+
+/** Shape of GET /api/health (mirrors api/health.ts + server/app.py). The
+ *  frontend reads config/datasource/LLM/auth status from here — the
+ *  browser build has no env vars of its own. */
+interface HealthStatus {
+  ok: boolean;
+  llm: boolean;
+  llm_configured: boolean;
+  llm_live: boolean;
+  llm_circuit: string;
+  llmModel: string | null;
+  datasource: { mode: string; status: string; detail: string };
+  db: { mode: string; configured: boolean; detail: string };
+  auth: { enabled: boolean; configured: boolean; provider: string; missing: string[]; note: string };
+  realAttSystems: boolean;
+  demoData: string;
+}
 
 type View = 'dashboard' | 'customers' | 'cases' | 'pipelines' | 'medallion' | 'rag' | 'stair' | 'evals' | 'observability';
 const NAV: { id: View; label: string }[] = [
@@ -47,13 +68,19 @@ export default function App() {
   const [state, setState] = useState<AppState>(() => loadState());
   const [view, setView] = useState<View>('dashboard');
   const [apiStatus, setApiStatus] = useState('checking…');
+  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [notice, setNotice] = useState('');
   const stateRef = useRef(state);
   stateRef.current = state;
 
   useEffect(() => { saveState(state); }, [state]);
   useEffect(() => {
-    fetch('/api/health').then((r) => r.json()).then((j) => setApiStatus(j.ok ? (j.llm ? 'API live (Groq live LLM configured)' : 'API live (deterministic engine, no LLM key)') : 'API unavailable — local engine in use')).catch(() => setApiStatus('API unavailable in local dev — local engine in use'));
+    fetch('/api/health').then((r) => r.json()).then((j) => {
+      setHealth(j as HealthStatus);
+      // llm_live (not merely llm_configured) is the honest signal: it is
+      // true only when a live Groq call actually succeeded.
+      setApiStatus(j.ok ? (j.llm_live ? 'API live (Groq live — probe succeeded)' : j.llm_configured ? 'API live (Groq key configured, live call not yet verified)' : 'API live (deterministic engine, no LLM key)') : 'API unavailable — local engine in use');
+    }).catch(() => setApiStatus('API unavailable in local dev — local engine in use'));
   }, []);
 
   const mutate = (fn: (s: AppState) => AppState) => {
@@ -62,8 +89,14 @@ export default function App() {
     setState(next);
     return next;
   };
-  const audit = (actor: 'agent' | 'human' | 'system', action: string, detail: string) => {
-    mutate((s) => ({ ...s, audit: [{ id: uid('AUD'), at: nowIso(), actor, action, detail }, ...s.audit].slice(0, 200) }));
+  // Audit sink: every entry is PII-redacted here (phone/email masked)
+  // and carries its run id, duration and trace id when it belongs to a run.
+  const audit = (actor: 'agent' | 'human' | 'system', action: string, detail: string, opts: { runId?: string; durationMs?: number | null; traceId?: string } = {}) => {
+    mutate((s) => ({ ...s, audit: [{ id: uid('AUD'), at: nowIso(), actor, action, detail: redactPII(detail), ...(opts.runId ? { runId: opts.runId } : {}), durationMs: opts.durationMs ?? null, ...(opts.traceId ? { traceId: opts.traceId } : {}) }, ...s.audit].slice(0, 200) }));
+  };
+  // Event feed sink: append-only, redacted at creation (see lib/events.ts).
+  const emit = (event: AppEvent) => {
+    mutate((s) => ({ ...s, events: [event, ...(s.events ?? [])].slice(0, 200) }));
   };
 
   // ---------- Agent run: plan -> pause for approval -> execute on approval ----------
@@ -77,9 +110,10 @@ export default function App() {
     setNotice('');
     const plan = planRun(snap, c);
     const runId = uid('RUN');
+    const traceId = uid('TRC');
     const started = nowIso();
     const t0 = performance.now();
-    let run: AgentRun = { id: runId, caseId, startedAt: started, status: 'running', steps: plan.steps.map((s) => ({ ...s, ms: 0, status: 'pending' as const })), proposedCredit: plan.proposedCredit, creditApplied: null, agentMs: null, idempotencyKey: c.idempotencyKey, failureReason: plan.failureReason ?? undefined, effectKind: plan.effectKind, effectData: plan.effectData, proposedAction: plan.proposedAction ?? undefined };
+    let run: AgentRun = { id: runId, traceId, caseId, startedAt: started, status: 'running', steps: plan.steps.map((s) => ({ ...s, ms: 0, status: 'pending' as const })), proposedCredit: plan.proposedCredit, creditApplied: null, agentMs: null, idempotencyKey: c.idempotencyKey, failureReason: plan.failureReason ?? undefined, effectKind: plan.effectKind, effectData: plan.effectData, proposedAction: plan.proposedAction ?? undefined };
     mutate((s) => ({ ...s, cases: s.cases.map((x) => x.id === caseId ? { ...x, status: 'running' } : x), runs: [run, ...s.runs] }));
     // Execute steps one by one with real, measured timing.
     for (let i = 0; i < run.steps.length; i++) {
@@ -96,14 +130,16 @@ export default function App() {
       run = { ...run, status: 'failed', finishedAt: nowIso() };
       const runCopy = run;
       mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? runCopy : r), cases: s.cases.map((x) => x.id === caseId ? { ...x, status: 'failed', resolution: plan.failureReason! } : x) }));
-      audit('agent', 'run_failed', `${runId} for ${caseId} failed: ${plan.failureReason}`);
+      audit('agent', 'run_failed', `${runId} for ${caseId} failed: ${plan.failureReason}`, { runId, durationMs: Math.round(performance.now() - t0), traceId });
+      emit(newAppEvent('run_failed', 'agent', `${runId} for ${caseId} failed: ${plan.failureReason}`, { runId, traceId }));
       setNotice(`Run failed honestly: ${plan.failureReason}`);
       return;
     }
     run = { ...run, status: 'awaiting_approval' };
     const runCopy = run;
     mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? runCopy : r), cases: s.cases.map((x) => x.id === caseId ? { ...x, status: 'awaiting_approval' } : x) }));
-    audit('agent', 'awaiting_approval', `${runId} for ${caseId} proposes a credit of ${money(plan.proposedCredit ?? 0)} and is paused for human approval.`);
+    audit('agent', 'awaiting_approval', `${runId} for ${caseId} proposes a credit of ${money(plan.proposedCredit ?? 0)} and is paused for human approval.`, { runId, durationMs: Math.round(performance.now() - t0), traceId });
+    emit(newAppEvent(plan.proposedCredit !== null ? 'credit_proposed' : 'plan_proposed', 'agent', `${runId} for ${caseId} proposes ${plan.proposedAction ?? `a credit of ${money(plan.proposedCredit ?? 0)}`} and is paused for human approval.`, { runId, traceId }));
     setNotice(`Agent paused for approval: proposed credit ${money(plan.proposedCredit ?? 0)} for ${caseId}. Approve or reject below.`);
   };
 
@@ -119,7 +155,7 @@ export default function App() {
     // --- Credit effects: idempotency first — never credit twice. ---
     if ((kind === 'credit' || kind === 'outage_credit' || kind === 'retention_offer') && creditAlreadyApplied(snap, c.id)) {
       mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? { ...r, status: 'completed', finishedAt: nowIso(), duplicateOfRunId: s.runs.find((x) => x.caseId === c.id && x.status === 'completed')?.id, failureReason: 'Credit already applied — idempotent, no second credit.' } : r) }));
-      audit('human', 'approve_duplicate', `Approval for ${runId} was a duplicate: credit already applied for ${c.id}. No second credit issued.`);
+      audit('human', 'approve_duplicate', `Approval for ${runId} was a duplicate: credit already applied for ${c.id}. No second credit issued.`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
       setNotice('Credit was already applied — idempotent. No second credit issued.');
       return;
     }
@@ -127,7 +163,7 @@ export default function App() {
       const dup = findDuplicate(snap.ledger, c.customerId);
       if (!dup || run.proposedCredit === null) {
         mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? { ...r, status: 'failed', finishedAt: nowIso(), failureReason: 'Duplicate no longer present at approval time.' } : r), cases: s.cases.map((x) => x.id === c.id ? { ...x, status: 'failed', resolution: 'Duplicate no longer present at approval time.' } : x) }));
-        audit('human', 'approve_failed', `Approval for ${runId} failed: duplicate no longer present.`);
+        audit('human', 'approve_failed', `Approval for ${runId} failed: duplicate no longer present.`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
         return;
       }
       await finishRun(runId, c, kind, `Credit ${money(run.proposedCredit)} posted against ${dup.duplicate.invoice}.`, t0, (s) => {
@@ -220,7 +256,10 @@ export default function App() {
         cases: applied.cases.map((x) => x.id === c.id ? { ...x, status: 'resolved', resolution } : x),
       };
     });
-    audit('human', 'approved', `Human approved ${runId} (${kind}): ${resolution}`);
+    audit('human', 'approved', `Human approved ${runId} (${kind}): ${resolution}`, { runId, durationMs: agentMs, traceId: run.traceId });
+    const creditKind = kind === 'credit' || kind === 'outage_credit' || kind === 'retention_offer';
+    emit(newAppEvent(creditKind ? 'credit_approved' : 'plan_approved', 'human', `Human approved ${runId} (${kind}): ${resolution}`, { runId, traceId: run.traceId }));
+    emit(newAppEvent(creditKind ? 'credit_executed' : 'plan_executed', 'human', `Human approved ${runId} (${kind}): ${resolution}`, { runId, traceId: run.traceId }));
     setNotice(`Done: ${resolution}`);
   };
 
@@ -233,7 +272,7 @@ export default function App() {
       runs: s.runs.map((r) => r.id === runId ? { ...r, status: 'rejected', finishedAt: nowIso() } : r),
       cases: s.cases.map((x) => x.id === run.caseId ? { ...x, status: 'rejected', resolution: 'Human reviewer rejected the proposed credit. No money moved.' } : x),
     }));
-    audit('human', 'rejected_credit', `Human rejected ${runId}: no credit issued, no ledger change.`);
+    audit('human', 'rejected_credit', `Human rejected ${runId}: no credit issued, no ledger change.`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
     setNotice('Rejected: no credit issued, no ledger change. The case can be re-run after review.');
   };
 
@@ -242,6 +281,43 @@ export default function App() {
   const dash = useMemo(() => dashboard(state), [state]);
   const medianMin = dash.medianAgentMs === null ? null : dash.medianAgentMs / 60000;
   const costSaved = dash.casesResolved * (MANUAL_COST_USD - AGENT_COST_USD);
+
+  // ---- Auth gate (see src/lib/auth.ts). Disabled by default in the demo.
+  // When AUTH_ENABLED=true without config, the app shows an honest "auth
+  // not configured" state — never a fake login. When configured, the gate
+  // is a clearly-labelled placeholder: the OAuth callback is not yet
+  // implemented, so the sign-in button is disabled and says so.
+  // Production uses AT&T Entra ID.
+  if (health?.auth?.enabled) {
+    const auth = health.auth;
+    if (!auth.configured) {
+      return (
+        <div>
+          <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform — director demo</span></div></div></header>
+          <div className="wrap">
+            <div className="panel highlight mt">
+              <h1>Sign-in is not available</h1>
+              <p>Authentication is enabled but <strong>not configured</strong> — missing {auth.missing.join(', ')}. This is not a login screen: there is no demo account and no way to sign in until the fulfilment team registers the app with {auth.provider} (AT&amp;T Entra ID in production) and sets the missing variables. See docs/DEPLOYMENT.md step 4.</p>
+              <p className="small muted">{auth.note}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div>
+        <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform — director demo</span></div></div></header>
+        <div className="wrap">
+          <div className="panel highlight mt">
+            <h1>Sign in with {auth.provider}</h1>
+            <p>Authentication is enabled for {auth.provider} (AT&amp;T Entra ID in production). The OAuth callback handler is not yet implemented, so sign-in is a placeholder for now.</p>
+            <button className="btn accent" disabled title="OAuth callback not yet implemented — see docs/DEPLOYMENT.md step 4">Sign in with {auth.provider} (not yet wired)</button>
+            <p className="small muted mt">{auth.note}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -256,14 +332,14 @@ export default function App() {
       </nav>
       <div className="wrap">
         {notice && <div className="panel mt" role="status">{notice}</div>}
-        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} onRunDemo={runDemoCase} onShowCases={() => setView('cases')} />}
-        {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} />}
-        {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} mutate={mutate} audit={audit} />}
-        {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} />}
+        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onRunDemo={runDemoCase} onShowCases={() => setView('cases')} />}
+        {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} />}
+        {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} mutate={mutate} audit={audit} emit={emit} />}
+        {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} emit={emit} />}
         {view === 'medallion' && <MedallionView state={state} audit={audit} />}
         {view === 'rag' && <RagView state={state} mutate={mutate} audit={audit} />}
         {view === 'stair' && <StairView state={state} />}
-        {view === 'evals' && <EvalsView state={state} mutate={mutate} audit={audit} />}
+        {view === 'evals' && <EvalsView state={state} mutate={mutate} audit={audit} emit={emit} />}
         {view === 'observability' && <ObservabilityView state={state} onReset={() => { const fresh = resetState(); setState(fresh); stateRef.current = fresh; setNotice('Demo data reset to the seeded state.'); }} />}
         <footer>
           Honest about what is live: frontend ↔ serverless API ↔ agent engine ↔ data store are live-connected inside this prototype, analytics are computed live from real runs, LangGraph-style code is real Python in server/, and RAG/STAIR retrieval is real over seeded policy docs. Live Groq (openai/gpt-oss-120b) runs only when GROQ_API_KEY is set — otherwise the agent is deterministic and says so. There is no real AT&amp;T internal API, and all demo data is synthetic. Every step is traced to a ledger record or a cited policy section. Manual baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case (POL-005). Agent cost {money(AGENT_COST_USD)} per run is a stated demo assumption, not a measured cloud bill.
@@ -274,7 +350,7 @@ export default function App() {
 }
 
 /* ---------------- Dashboard ---------------- */
-function Dashboard({ dash, medianMin, costSaved, state, onRunDemo, onShowCases }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; onRunDemo: () => void; onShowCases: () => void }) {
+function Dashboard({ dash, medianMin, costSaved, state, health, onRunDemo, onShowCases }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onRunDemo: () => void; onShowCases: () => void }) {
   return (
     <section>
       <h1>Five journeys, one agent — end to end</h1>
@@ -298,6 +374,7 @@ function Dashboard({ dash, medianMin, costSaved, state, onRunDemo, onShowCases }
         <div className="card"><div className="num">{state.runs.length}</div><div className="lbl">Agent runs (all time)</div></div>
       </div>
       {dash.runs === 0 && <div className="notice">No runs yet — the numbers above show “—” rather than a fake 100%. Run the demo case to see real, measured outcomes.</div>}
+      <ProductionReadinessPanel health={health} state={state} />
       <div className="grid2">
         <div className="panel">
           <h2>How it works</h2>
@@ -324,8 +401,115 @@ function Dashboard({ dash, medianMin, costSaved, state, onRunDemo, onShowCases }
   );
 }
 
+/* ---------------- Production readiness ----------------
+ * Live checklist: what is actually connected right now (from
+ * /api/health + live state) vs what the fulfilment team still needs to
+ * connect. Nothing here is a claim — every row is computed from the
+ * health response, the last eval run, or the Medallion snapshot.
+ * The JD coverage list mirrors docs/JD_COVERAGE.md, which maps every
+ * line of the Principal AI-Native Software Engineer JD to the file
+ * that implements it and how to verify it. */
+function ProductionReadinessPanel({ health, state }: { health: HealthStatus | null; state: AppState }) {
+  const medallion = useMemo(() => buildMedallion(state, defaultBatchId(state)), [state]);
+  const lastEval = state.evalRuns[0];
+  const rows: { label: string; tone: 'green' | 'red' | 'amber' | 'blue' | ''; status: string; detail: string }[] = [
+    {
+      label: 'Config — GROQ_API_KEY',
+      tone: !health ? '' : health.llm_configured ? 'green' : 'amber',
+      status: !health ? 'unknown — API unreachable in local dev' : health.llm_configured ? 'set' : 'not set',
+      detail: !health ? 'Start the API or deploy to check.' : health.llm_configured ? 'Live-LLM mode available.' : 'Deterministic engine only — the demo still runs and says so.',
+    },
+    {
+      label: 'LLM — live Groq call',
+      tone: !health ? '' : health.llm_live ? 'green' : health.llm_configured ? 'amber' : 'amber',
+      status: !health ? 'unknown' : health.llm_live ? `live (${health.llmModel})` : health.llm_configured ? 'key set, live call not yet verified' : 'off — deterministic',
+      detail: !health ? '' : health.llm_live ? `A real Groq call succeeded (probe, cached 60s). Circuit: ${health.llm_circuit}.` : health.llm_configured ? 'The key is configured but no live call has succeeded yet — run a case with live LLM to verify.' : 'No key. The agent is deterministic code and every trace says so.',
+    },
+    {
+      label: 'Datasource',
+      tone: !health ? '' : health.datasource.mode === 'att' ? (health.datasource.status === 'configured' ? 'green' : 'red') : 'amber',
+      status: !health ? 'unknown' : health.datasource.mode === 'att' ? `att — ${health.datasource.status}` : 'seed — synthetic demo data',
+      detail: !health ? '' : health.datasource.detail,
+    },
+    {
+      label: 'Database',
+      tone: !health ? '' : health.db.configured ? 'amber' : 'amber',
+      status: !health ? 'unknown' : health.db.configured ? 'DATABASE_URL set — not yet wired' : 'no live database',
+      detail: !health ? '' : health.db.detail,
+    },
+    {
+      label: 'Auth gate',
+      tone: !health ? '' : !health.auth.enabled ? 'blue' : health.auth.configured ? 'amber' : 'red',
+      status: !health ? 'unknown' : !health.auth.enabled ? 'off — demo mode' : health.auth.configured ? 'on — placeholder (callback not wired)' : 'on — NOT configured',
+      detail: !health ? '' : health.auth.note,
+    },
+    {
+      label: 'Last eval suite',
+      tone: !lastEval ? 'amber' : lastEval.passed ? 'green' : 'red',
+      status: !lastEval ? 'not run yet' : `${lastEval.scorePct}% — ${lastEval.passed ? 'PASS' : 'FAIL'} (gate ${lastEval.gatePct}%)`,
+      detail: !lastEval ? 'Run the suite in Evaluations — the release gate blocks on it.' : lastEval.passed ? 'Release gate would pass on this result.' : 'Release gate BLOCKS on this result — see the failed checks in Evaluations.',
+    },
+    {
+      label: 'Medallion',
+      tone: 'green',
+      status: `Bronze ${medallion.bronzeTotal} = Silver ${medallion.silverPassed} + quarantined ${medallion.silverQuarantined}`,
+      detail: `Gold: reconciled ledger ${medallion.gold.ledgerReconciled} entries ($${medallion.gold.ledgerReconciledTotal.toFixed(2)}), Customer 360 ${medallion.gold.customers360}, usage ${medallion.gold.usageTotalGb} GB.`,
+    },
+  ];
+  const todos: string[] = [];
+  if (health && !health.llm_configured) todos.push('Set GROQ_API_KEY for live-LLM mode (or keep the deterministic engine — it is a real mode, not a gap).');
+  if (health && health.datasource.mode === 'seed') todos.push('Connect ATT_API_BASE_URL + ATT_API_KEY and set DATASOURCE=att for live AT&T data — the adapter fails honestly until then, never fakes it.');
+  if (health && !health.db.configured) todos.push('Provision Postgres and set DATABASE_URL when the fulfilment team wires the store (reserved today).');
+  if (health && !health.auth.enabled) todos.push('Register the Entra ID app and set AUTH_ENABLED=true + AUTH_CLIENT_ID + AUTH_ISSUER_URL when login is required.');
+  if (!lastEval) todos.push('Run the evaluation suite (Evaluations tab) — no release is approved without a passing 85% gate.');
+  if (health?.datasource.mode === 'att' && health.datasource.status !== 'configured') todos.push('att mode is selected but its connection vars are missing — data loads will fail honestly until they are set.');
+  const jd: { n: number; label: string; tone: 'green' | 'amber' | 'blue'; status: string }[] = [
+    { n: 1, label: 'Production Python + FastAPI (api/ ↔ server/ mirrors)', tone: 'green', status: 'live' },
+    { n: 2, label: 'Agentic workflows — explicit state machine + trace', tone: 'green', status: 'live' },
+    { n: 3, label: 'Tool/service contracts + idempotent execution', tone: 'green', status: 'live' },
+    { n: 4, label: 'Evaluations + 85% release gate that blocks', tone: lastEval ? (lastEval.passed ? 'green' : 'amber') : 'amber', status: lastEval ? (lastEval.passed ? 'live — gate passes' : 'live — gate blocks') : 'live — run the suite' },
+    { n: 5, label: 'RAG — STAIR primary, chunk baseline, no vector DB by design', tone: 'green', status: 'live' },
+    { n: 6, label: 'End-to-end backend + DB + frontend (React/TS; API is framework-agnostic)', tone: 'amber', status: 'partial — DB reserved' },
+    { n: 7, label: 'Secure-by-design — env secrets, auth gate, PII redaction, audit', tone: 'green', status: 'live' },
+    { n: 8, label: 'Observability — trace IDs, JSON logs, /metrics, runbook', tone: 'green', status: 'live' },
+    { n: 9, label: 'Testing / CI / Docker', tone: 'amber', status: 'live in repo — docker build not run here (no Docker in this VM)' },
+    { n: 10, label: 'Resilience — circuit breaker, retries, bounded batches, fallback', tone: 'green', status: 'live' },
+    { n: 11, label: 'Event-driven — append-only feed, Kafka/SNS seam', tone: 'green', status: 'live' },
+    { n: 12, label: 'AI-assisted engineering, disclosed', tone: 'green', status: 'documented' },
+  ];
+  return (
+    <div className="panel mt">
+      <h2>Production readiness — live checklist</h2>
+      <p className="small muted">Every row is computed from /api/health, the last eval run, or the Medallion snapshot — not claimed. See docs/JD_COVERAGE.md for the full JD mapping.</p>
+      {rows.map((r) => (
+        <div key={r.label} className="row space" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+          <span className="small"><strong>{r.label}</strong><br /><span className="muted">{r.detail}</span></span>
+          <Pill tone={r.tone}>{r.status}</Pill>
+        </div>
+      ))}
+      {todos.length > 0 && (
+        <div className="mt">
+          <h3>What the fulfilment team still needs to connect</h3>
+          {todos.map((t) => <p key={t} className="small">• {t}</p>)}
+        </div>
+      )}
+      {todos.length === 0 && <p className="small ok mt">Everything connected — no open fulfilment items on the live checklist.</p>}
+      <div className="mt">
+        <h3>JD coverage — Principal AI-Native Software Engineer</h3>
+        {jd.map((j) => (
+          <div key={j.n} className="row space" style={{ padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+            <span className="small">{j.n}. {j.label}</span>
+            <Pill tone={j.tone}>{j.status}</Pill>
+          </div>
+        ))}
+        <p className="small muted mt">Full mapping — file, how to verify, and what is honestly still missing — in docs/JD_COVERAGE.md.</p>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Customers ---------------- */
-function CustomersView({ state, mutate, audit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void }) {
+function CustomersView({ state, mutate, audit, emit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void }) {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Customer | null>(null);
   const [name, setName] = useState('');
@@ -360,6 +544,7 @@ function CustomersView({ state, mutate, audit }: { state: AppState; mutate: (fn:
           const id = uid('CUST');
           mutate((s) => ({ ...s, customers: [...s.customers, { id, name: name.trim(), account: `ACC-${Math.floor(100000 + Math.random() * 899999)}`, phone: '(555) 555-0100', email: '', plan, status: 'active', since: new Date().toISOString().slice(0, 10), balance: 0, city: '—' }] }));
           audit('human', 'customer_created', `Created customer ${name.trim()} (${id}).`);
+          emit(newAppEvent('customer_created', 'human', `Created customer ${name.trim()} (${id}).`));
           setName('');
         }}>Add customer</button>
       </div>
@@ -384,13 +569,14 @@ function CustomersView({ state, mutate, audit }: { state: AppState; mutate: (fn:
 }
 
 /* ---------------- Cases ---------------- */
-function CasesView({ state, onRun, onApprove, onReject, mutate, audit }: {
+function CasesView({ state, onRun, onApprove, onReject, mutate, audit, emit }: {
   state: AppState;
   onRun: (id: string) => Promise<void>;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string) => void;
   mutate: (fn: (s: AppState) => AppState) => void;
   audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void;
+  emit: (e: AppEvent) => void;
 }) {
   const [customerId, setCustomerId] = useState('CUST-1001');
   const [type, setType] = useState<Case['type']>('duplicate_charge');
@@ -433,9 +619,12 @@ function CasesView({ state, onRun, onApprove, onReject, mutate, audit }: {
       </table></div>
 
       <h2 className="mt">Run trace</h2>
-      {state.runs.length === 0 ? <p className="muted">No runs yet.</p> : state.runs.slice(0, 3).map((r) => (
+      {state.runs.length === 0 ? <p className="muted">No runs yet.</p> : state.runs.slice(0, 3).map((r) => {
+        const trace = stateTraceForRun(r);
+        return (
         <div key={r.id} className="panel">
           <div className="row space"><strong>{r.id} · {r.caseId}</strong><span className="row">{statusPill(r.status)}<span className="small muted">{r.agentMs === null ? '' : `agent ${fmtMs(r.agentMs)}`}</span></span></div>
+          <p className="small"><strong>State machine:</strong> {trace.states.join(' → ')} {trace.valid ? <Pill tone="green">valid</Pill> : <Pill tone="red">invalid</Pill>}{r.traceId ? <span className="muted"> · trace {r.traceId}</span> : null}</p>
           {r.failureReason && <p className="error small">{r.failureReason}</p>}
           {r.duplicateOfRunId && <p className="small muted">Idempotent duplicate of {r.duplicateOfRunId} — no second credit.</p>}
           {r.steps.map((s) => (
@@ -447,7 +636,8 @@ function CasesView({ state, onRun, onApprove, onReject, mutate, audit }: {
           ))}
           {r.proposedCredit !== null && <p className="small mt">Proposed credit: {money(r.proposedCredit)} · Credit applied: {r.creditApplied === null ? '—' : money(r.creditApplied)} · Idempotency key: {r.idempotencyKey}</p>}
         </div>
-      ))}
+        );
+      })}
 
       <div className="panel">
         <h2>Create a case</h2>
@@ -462,6 +652,7 @@ function CasesView({ state, onRun, onApprove, onReject, mutate, audit }: {
           const key = `${id.toLowerCase()}-v1`;
           mutate((s) => ({ ...s, cases: [...s.cases, { id, customerId, type, title: title.trim(), description: title.trim(), amount: Number(amount) || 0, status: 'open', createdAt: nowIso(), idempotencyKey: key }] }));
           audit('human', 'case_created', `Created case ${id} for ${customerId}.`);
+          emit(newAppEvent('case_created', 'human', `Created case ${id} for ${customerId}.`));
           setTitle('');
         }}>Create case</button>
       </div>
@@ -470,7 +661,7 @@ function CasesView({ state, onRun, onApprove, onReject, mutate, audit }: {
 }
 
 /* ---------------- Pipelines ---------------- */
-function PipelinesView({ state, mutate, audit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void }) {
+function PipelinesView({ state, mutate, audit, emit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void }) {
   const [runningId, setRunningId] = useState<string | null>(null);
   const runPipeline = async (id: string) => {
     setRunningId(id);
@@ -485,6 +676,7 @@ function PipelinesView({ state, mutate, audit }: { state: AppState; mutate: (fn:
       pipelineRuns: [{ id: uid('PRUN'), pipelineId: id, startedAt: nowIso(), processed: result.processed, failed: result.failed, exceptions: result.exceptions, status, ms }, ...s.pipelineRuns],
     }));
     audit('system', 'pipeline_run', `Pipeline ${id}: ${result.processed} processed, ${result.failed} failed. ${result.exceptions.join('; ') || 'No exceptions.'}`);
+    emit(newAppEvent(result.failed > 0 ? 'pipeline_failed' : 'pipeline_run', 'system', `Pipeline ${id}: ${result.processed} processed, ${result.failed} failed. ${result.exceptions.join('; ') || 'No exceptions.'}`));
     setRunningId(null);
   };
   return (
@@ -547,8 +739,9 @@ function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' |
       </div>
       {runs.length > 0 && runs.slice(0, 3).map((r) => (
         <div key={`${r.batchId}-${r.newRecords}-${runs.indexOf(r)}`} className="panel">
-          <div className="row space"><strong>Batch {r.batchId}</strong><span className="small muted">{r.newRecords} new · {r.skippedRecords} skipped by watermark · {r.retries} retries</span></div>
+          <div className="row space"><strong>Batch {r.batchId}</strong><span className="small muted">{r.newRecords} new · {r.skippedRecords} skipped by watermark · {r.retries} retries · {r.deferredRecords} deferred to the next batch</span></div>
           <p className="small">Bronze {r.snapshot.bronzeTotal} = Silver passed {r.snapshot.silverPassed} + quarantined {r.snapshot.silverQuarantined} · Gold ledger {r.snapshot.gold.ledgerReconciled} entries, ${r.snapshot.gold.ledgerReconciledTotal.toFixed(2)}</p>
+          {r.deferredRecords > 0 && <p className="small muted">Backpressure: the batch is bounded at {MEDALLION_BATCH_LIMIT} new records — the {r.deferredRecords} deferred records stay un-watermarked and are picked up by the next batch, never dropped.</p>}
         </div>
       ))}
       <h2 className="mt">Quarantine ({snapshot.quarantine.length}) — listed, never silently dropped</h2>
@@ -639,18 +832,55 @@ function RagView({ state, mutate, audit }: { state: AppState; mutate: (fn: (s: A
 }
 
 /* ---------------- Evaluations ---------------- */
-function EvalsView({ state, mutate, audit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void }) {
+function EvalsView({ state, mutate, audit, emit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void }) {
+  const [release, setRelease] = useState<{ status: 'approved' | 'blocked'; reason: string; failures: string[] } | null>(null);
   const runSuite = () => {
     const results = runEvalSuite(state);
     const { scorePct, passed } = evalScore(results);
     mutate((s) => ({ ...s, evalRuns: [{ id: uid('EVAL'), startedAt: nowIso(), results, scorePct, gatePct: EVAL_GATE_PCT, passed }, ...s.evalRuns] }));
     audit('system', 'eval_run', `Evaluation suite: ${scorePct}% (gate ${EVAL_GATE_PCT}%) — ${passed ? 'PASS' : 'FAIL'}.`);
+    emit(newAppEvent('eval_run', 'system', `Evaluation suite: ${scorePct}% (gate ${EVAL_GATE_PCT}%) — ${passed ? 'PASS' : 'FAIL'}.`));
+    setRelease(null);
+  };
+  // The release gate, as a button: it BLOCKS the release when the latest
+  // eval run fails the 85% gate (or when no suite has run) and says why.
+  // Same rule as POST /evals/release-gate on the server.
+  const requestRelease = () => {
+    const latest = state.evalRuns[0];
+    if (!latest) {
+      setRelease({ status: 'blocked', reason: 'Release BLOCKED — no evaluation suite has run yet. Run the suite first; there is no result to gate on.', failures: [] });
+      audit('system', 'release_blocked', 'Release BLOCKED — no evaluation suite has run yet.');
+      emit(newAppEvent('release_blocked', 'system', 'Release BLOCKED — no evaluation suite has run yet.'));
+      return;
+    }
+    if (!latest.passed) {
+      const failures = latest.results.filter((r) => !r.passed).map((r) => `${r.id} — ${r.name}`);
+      setRelease({ status: 'blocked', reason: `Release BLOCKED — eval suite ${latest.scorePct}% (gate ${latest.gatePct}%).`, failures });
+      audit('system', 'release_blocked', `Release BLOCKED: eval suite ${latest.scorePct}% (gate ${latest.gatePct}%). Failed: ${failures.join('; ')}`);
+      emit(newAppEvent('release_blocked', 'system', `Release BLOCKED: eval suite ${latest.scorePct}% (gate ${latest.gatePct}%). Failed: ${failures.join('; ')}`));
+      return;
+    }
+    setRelease({ status: 'approved', reason: `Release approved — eval suite ${latest.scorePct}% (gate ${latest.gatePct}%).`, failures: [] });
+    audit('system', 'release_approved', `Release approved: eval suite ${latest.scorePct}% (gate ${latest.gatePct}%).`);
+    emit(newAppEvent('release_approved', 'system', `Release approved: eval suite ${latest.scorePct}% (gate ${latest.gatePct}%).`));
   };
   return (
     <section>
       <h1>Evaluations</h1>
       <p className="muted">8 checks: duplicate detection, amount, non-duplicate discrimination, RAG grounding, RAG refusal, idempotency, and the agent plan. Release gate: {EVAL_GATE_PCT}%. The suite runs against live state — delete POL-001 and it fails.</p>
-      <button className="btn" onClick={runSuite}>Run evaluation suite</button>
+      <div className="row">
+        <button className="btn" onClick={runSuite}>Run evaluation suite</button>
+        <button className="btn accent" onClick={requestRelease}>Request release</button>
+        <span className="small muted">The release gate blocks unless the latest suite passes {EVAL_GATE_PCT}%.</span>
+      </div>
+      {release && (
+        <div className={`panel mt ${release.status === 'blocked' ? 'highlight' : ''}`}>
+          <div className="row space"><strong>{release.status === 'approved' ? 'Release approved' : 'Release blocked'}</strong>{release.status === 'approved' ? <Pill tone="green">approved</Pill> : <Pill tone="red">blocked</Pill>}</div>
+          <p className="small">{release.reason}</p>
+          {release.failures.map((f) => <p key={f} className="small error">Failed: {f}</p>)}
+          {release.status === 'blocked' && <p className="small muted">Fix the failed checks (or restore the state they depend on) and re-run the suite. The release stays blocked until the gate passes.</p>}
+        </div>
+      )}
       {state.evalRuns.map((er) => (
         <div key={er.id} className="panel mt">
           <div className="row space"><strong>{er.id}</strong><span className="row">{er.passed ? <Pill tone="green">PASS</Pill> : <Pill tone="red">FAIL</Pill>}<span>{er.scorePct}% (gate {er.gatePct}%)</span></span></div>
@@ -682,10 +912,19 @@ function ObservabilityView({ state, onReset }: { state: AppState; onReset: () =>
         </div>
       ))}
       <h2 className="mt">Audit log ({state.audit.length})</h2>
+      <p className="small muted">Every entry carries its run ID, measured duration, and trace ID when it belongs to a run. Phone numbers and email addresses are masked at the audit sink — they never reach this log.</p>
       <div className="table-wrap"><table>
-        <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead>
-        <tbody>{state.audit.slice(0, 50).map((a) => <tr key={a.id}><td>{a.at.slice(0, 19).replace('T', ' ')}</td><td>{a.actor}</td><td>{a.action}</td><td>{a.detail}</td></tr>)}</tbody>
+        <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Run / Trace</th><th>Duration</th><th>Detail</th></tr></thead>
+        <tbody>{state.audit.slice(0, 50).map((a) => <tr key={a.id}><td>{a.at.slice(0, 19).replace('T', ' ')}</td><td>{a.actor}</td><td>{a.action}</td><td className="small">{a.runId ?? '—'}{a.traceId ? <><br /><span className="muted">{a.traceId}</span></> : null}</td><td>{fmtMs(a.durationMs ?? null)}</td><td>{a.detail}</td></tr>)}</tbody>
       </table></div>
+      <h2 className="mt">Event feed ({(state.events ?? []).length}) — append-only</h2>
+      <p className="small muted">Every state change emits a structured event (case_created, credit_proposed, credit_approved, credit_executed, pipeline_failed, …). This in-app feed is the seam where a real event bus (Kafka / SNS / EventBridge) plugs in — replace the append with a publish and subscribers get the same event types; see src/lib/events.ts and server/events.py.</p>
+      {(state.events ?? []).length === 0 ? <p className="muted">No events yet — run a case, create a case, or run a pipeline.</p> : (
+        <div className="table-wrap"><table>
+          <thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Run / Trace</th><th>Detail</th></tr></thead>
+          <tbody>{(state.events ?? []).slice(0, 50).map((e) => <tr key={e.id}><td>{e.at.slice(0, 19).replace('T', ' ')}</td><td>{e.type}</td><td>{e.actor}</td><td className="small">{e.runId ?? '—'}{e.traceId ? <><br /><span className="muted">{e.traceId}</span></> : null}</td><td>{e.detail}</td></tr>)}</tbody>
+        </table></div>
+      )}
       <div className="panel mt">
         <h2>Reset demo</h2>
         <p className="small muted">Restores the seeded synthetic state (20 customers, 12 open cases, 8 policy docs) and clears all runs, credits and audit entries.</p>
@@ -762,10 +1001,19 @@ function StairView({ state }: { state: AppState }) {
         <p className="small muted">A plain policy doc with no headings gets an auto-generated TOC (one section per sentence), flagged as auto-generated. If no heading or section matches a query, the answer is “not found in policy” instead of a guess. Example — auto TOC for POL-005:</p>
         <p className="small">{autoTocFromDoc(state.docs.find((d) => d.id === 'POL-005') ?? state.docs[0]).leaves.map((l) => l.path).join(' · ')}</p>
       </div>
-      <h2 className="mt">Per-query eval detail</h2>
+      <h2 className="mt">Per-query eval detail — STAIR vs chunk-RAG baseline (10 queries)</h2>
+      <p className="small muted">Same 10 questions, same expected answers. STAIR must return the exact leaf; the baseline is credited only when its top doc is the doc that contains the answer. This is the honest comparison — no paper numbers.</p>
       <div className="table-wrap"><table>
-        <thead><tr><th>Query</th><th>Expected leaf</th><th>Got</th><th></th></tr></thead>
-        <tbody>{evalResult.perQuery.map((r) => <tr key={r.query}><td>{r.query}</td><td>{r.expected}</td><td>{r.got ?? '—'}</td><td>{r.correct ? <Pill tone="green">correct</Pill> : <Pill tone="red">miss</Pill>}</td></tr>)}</tbody>
+        <thead><tr><th>Query</th><th>Expected leaf</th><th>STAIR got</th><th>STAIR</th><th>Chunk baseline got (doc)</th><th>Chunk</th></tr></thead>
+        <tbody>{evalResult.perQuery.map((r, i) => {
+          const chunk = chunkEval.perQuery[i];
+          return (
+            <tr key={r.query}>
+              <td>{r.query}</td><td>{r.expected}</td><td>{r.got ?? '—'}</td><td>{r.correct ? <Pill tone="green">correct</Pill> : <Pill tone="red">miss</Pill>}</td>
+              <td>{chunk?.gotDoc ?? '—'}</td><td>{chunk?.correct ? <Pill tone="green">correct</Pill> : <Pill tone="red">miss</Pill>}</td>
+            </tr>
+          );
+        })}</tbody>
       </table></div>
     </section>
   );

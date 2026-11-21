@@ -486,6 +486,147 @@ def credit_already_applied(state: dict, case_id: str) -> bool:
     return any(e["id"] == f"LED-CR-{case_id}" for e in state["ledger"])
 
 
+def execute_approved(state: dict, case: dict, plan) -> dict:
+    """Execute an approved plan against `state` (mutated in place — the
+    caller passes a copy). Mirrors the frontend's approval execution
+    (src/App.tsx approveRun / finishRun): same effect kinds, same ledger
+    entries, same balance updates, same notifications.
+
+    This is the ONE mutating operation in the reference backend. It is
+    idempotent only through its callers: the /cases/{id}/execute endpoint
+    checks credit_already_applied() and its seen-idempotency-key store
+    BEFORE calling this. Calling it twice on the same state would post
+    twice — which is exactly why the endpoint, not this function, owns
+    the idempotency check (see server/tool_contracts.py: execute_approved).
+
+    Returns an outcome dict: effectKind, creditApplied, resolution,
+    ledgerEntryId. Raises ValueError when the plan can no longer be
+    executed (duplicate gone, no effect) — the endpoint turns that into
+    an honest 409, never a silent success.
+    """
+    import datetime
+
+    today = datetime.date.today().isoformat()
+    kind = plan.effect_kind
+    customer = next((c for c in state["customers"]
+                     if c["id"] == case["customerId"]), None)
+    if customer is None:
+        raise ValueError(f"Customer {case['customerId']} not found.")
+    notifications = state.setdefault("notifications", [])
+    orders = state.setdefault("orders", [])
+    tickets = state.setdefault("tickets", [])
+
+    def notify(message: str) -> None:
+        notifications.insert(0, {"id": f"NTF-{case['id']}",
+                                 "at": datetime.datetime.now().isoformat(),
+                                 "customerId": case["customerId"],
+                                 "message": message})
+
+    def post_entry(entry_id: str, invoice: str, service: str,
+                   amount: float) -> dict:
+        entry = {"id": entry_id, "customerId": case["customerId"],
+                 "invoice": invoice, "date": today, "service": service,
+                 "amount": amount, "kind": "credit", "status": "posted"}
+        state["ledger"].append(entry)
+        return entry
+
+    def apply_balance(delta: float) -> None:
+        customer["balance"] = round(customer["balance"] + delta, 2)
+
+    if kind == "credit":
+        dup = find_duplicate(state["ledger"], case["customerId"])
+        if not dup or plan.proposed_credit is None:
+            raise ValueError("Duplicate no longer present at approval time.")
+        credit = plan.proposed_credit
+        entry = post_entry(f"LED-CR-{case['id']}",
+                           dup["duplicate"]["invoice"],
+                           f"Credit — duplicate charge {dup['duplicate']['invoice']}",
+                           -credit)
+        apply_balance(-credit)
+        notify(f"Credit ${credit:.2f} applied for duplicate charge "
+               f"{dup['duplicate']['invoice']}.")
+        return {"effectKind": kind, "creditApplied": credit,
+                "resolution": f"Credit ${credit:.2f} posted against "
+                              f"{dup['duplicate']['invoice']}.",
+                "ledgerEntryId": entry["id"]}
+    if kind == "outage_credit":
+        amount = float(plan.effect_data.get("amount", OUTAGE_CREDIT_USD))
+        entry = post_entry(f"LED-CR-{case['id']}", "OUTAGE-2026-11",
+                           "Credit — outage service credit", -amount)
+        apply_balance(-amount)
+        orders.insert(0, {"id": f"ORD-{case['id']}",
+                          "customerId": case["customerId"],
+                          "kind": "technician_visit", "status": "scheduled",
+                          "detail": "Technician visit — outage restoration check",
+                          "createdAt": today})
+        tickets.insert(0, {"id": f"TCK-{case['id']}",
+                           "customerId": case["customerId"], "date": today,
+                           "subject": "Technician visit scheduled — outage",
+                           "status": "open"})
+        notify(f"Outage confirmed. Technician visit scheduled and "
+               f"${amount:.2f} service credit applied.")
+        return {"effectKind": kind, "creditApplied": amount,
+                "resolution": f"Outage credit ${amount:.2f} posted; "
+                              "technician visit scheduled.",
+                "ledgerEntryId": entry["id"]}
+    if kind == "retention_offer":
+        amount = float(plan.effect_data.get("amount", RETENTION_CREDIT_USD))
+        entry = post_entry(f"LED-CR-{case['id']}", "RETENTION-2026-11",
+                           "Credit — retention save offer", -amount)
+        apply_balance(-amount)
+        customer["status"] = "active"
+        notify(f"Save offer applied: ${amount:.2f} goodwill credit and "
+               "your account is reactivated.")
+        return {"effectKind": kind, "creditApplied": amount,
+                "resolution": f"Save offer applied: ${amount:.2f} goodwill "
+                              "credit; account reactivated.",
+                "ledgerEntryId": entry["id"]}
+    if kind == "provisioning":
+        orders.insert(0, {"id": f"ORD-{case['id']}",
+                          "customerId": case["customerId"],
+                          "kind": "new_line", "status": "activated",
+                          "detail": "Second line + device activation",
+                          "createdAt": today})
+        notify("Your second line is active. Device activation complete.")
+        return {"effectKind": kind, "creditApplied": None,
+                "resolution": "Second line provisioned and device activated.",
+                "ledgerEntryId": None}
+    if kind == "plan_change":
+        new_plan = str(plan.effect_data.get("newPlan", "Unlimited Premium"))
+        charge = float(plan.effect_data.get("charge", 0))
+        credit = float(plan.effect_data.get("credit", 0))
+        if credit > 0:
+            entry = post_entry(f"LED-UP-{case['id']}", "PLAN-CHANGE",
+                               f"Plan change — {new_plan} (pro-rated credit)",
+                               -credit)
+            apply_balance(-credit)
+            customer["plan"] = new_plan
+            notify(f"Your plan is now {new_plan}. Pro-rated credit "
+                   f"${credit:.2f} applied.")
+            return {"effectKind": kind, "creditApplied": credit,
+                    "resolution": f"Plan changed to {new_plan}; pro-rated "
+                                  f"credit ${credit:.2f} posted.",
+                    "ledgerEntryId": entry["id"]}
+        if charge <= 0:
+            raise ValueError("This plan-change run has no charge or credit "
+                             "to apply.")
+        entry = {"id": f"LED-UP-{case['id']}",
+                 "customerId": case["customerId"], "invoice": "PLAN-UPGRADE",
+                 "date": today,
+                 "service": f"Plan upgrade — {new_plan} (pro-rated)",
+                 "amount": charge, "kind": "charge", "status": "posted"}
+        state["ledger"].append(entry)
+        apply_balance(charge)
+        customer["plan"] = new_plan
+        notify(f"Your plan is now {new_plan}. Pro-rated charge "
+               f"${charge:.2f} applied.")
+        return {"effectKind": kind, "creditApplied": None,
+                "resolution": f"Plan changed to {new_plan}; pro-rated "
+                              f"charge ${charge:.2f} posted.",
+                "ledgerEntryId": entry["id"]}
+    raise ValueError("This run has no executable effect. Nothing was changed.")
+
+
 def validate_pipeline(pipeline_id: str, state: dict) -> dict:
     """Per-pipeline ETL validation. Each pipeline validates ONLY its own
     source — a run's counts and exceptions are that pipeline's, never the

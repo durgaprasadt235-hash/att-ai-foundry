@@ -67,6 +67,10 @@ export interface RunStep {
 export interface AgentRun {
   id: string;
   caseId: string;
+  /** Distributed-tracing style id, one per run, carried through the plan,
+   *  the audit entry, the events, and the UI run view — the same id links
+   *  every hop of one run. */
+  traceId?: string;
   startedAt: string;
   finishedAt?: string;
   status: 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'rejected';
@@ -155,6 +159,12 @@ export interface AuditEntry {
   actor: 'agent' | 'human' | 'system';
   action: string;
   detail: string;
+  /** Structured run linkage (Phase 2): every run-related audit entry
+   *  carries its run ID and measured duration — the same fields the
+   *  server API returns (api/run-case.ts, server/app.py /cases/{id}/plan). */
+  runId?: string;
+  durationMs?: number | null;
+  traceId?: string;
 }
 
 export interface Notification {
@@ -163,6 +173,8 @@ export interface Notification {
   customerId: string;
   message: string;
 }
+
+import type { AppEvent } from './events';
 
 export interface AppState {
   customers: Customer[];
@@ -179,6 +191,10 @@ export interface AppState {
   evalRuns: EvalRun[];
   audit: AuditEntry[];
   notifications: Notification[];
+  /** Append-only event feed (see lib/events.ts) — the seam where a real
+   *  event bus (Kafka / SNS / EventBridge) plugs in. Optional so older
+   *  saved states still load. */
+  events?: AppEvent[];
   seededAt: string;
 }
 
@@ -260,5 +276,9 @@ export interface MedallionBatchRun {
   newRecords: number;
   skippedRecords: number;
   retries: number;
+  /** Backpressure (bounded batch): records NOT processed because the
+   *  batch hit MEDALLION_BATCH_LIMIT. They stay un-watermarked and are
+   *  picked up by the next batch — never dropped, never blocking. */
+  deferredRecords: number;
   snapshot: MedallionSnapshot;
 }

@@ -6,6 +6,14 @@ structured trees (Table of Contents -> sections -> leaf nodes). Retrieval is
 given the full TOC and navigates to the exact leaf; the answer comes only
 from that leaf, retrieved intact, cited by its full section path.
 
+No vector DB by design: STAIR needs none — retrieval navigates a TOC, it
+does not search an embedding space. The adapter interface where embeddings
+would plug in, if the fulfilment team ever wants them, is retrieve()
+below: replace its token-overlap scoring with an embedding lookup over
+the same leaf titles, keep the trie allowlist, and the contract (only a
+TOC leaf may be returned) is unchanged. Nothing else in the agent needs
+to change.
+
 Constrained selection: the retriever may only return a leaf title that
 exists in the TOC. Valid titles are held in a trie; a candidate title is
 accepted only if the trie contains it exactly, so the retriever cannot
@@ -138,6 +146,31 @@ def measure_eval(trees: list[dict]) -> dict:
             "recallAt1": round(correct / len(per_query) * 100, 1),
             "invalidSections": invalid,
             "invalidRate": round(invalid / len(per_query) * 100, 1),
+            "perQuery": per_query}
+
+
+def measure_chunk_rag_eval(docs: list[dict]) -> dict:
+    """Chunk-RAG baseline recall on the same 10 queries, for the honest
+    side-by-side comparison: the baseline retrieves a whole doc, so it is
+    credited only when its top doc is the doc that contains the expected
+    answer. Per-query detail is included so the STAIR view (and
+    GET /stair/eval) can show what STAIR got AND what the baseline got."""
+    per_query = []
+    for item in EVAL_SET:
+        q = list(dict.fromkeys(tokenize(item["query"])))
+        best_doc, best = None, 0.0
+        for doc in docs:
+            hay = tokenize(f"{doc['title']} {doc['body']}")
+            score = len([t for t in q if t in hay]) / max(1, len(q))
+            if score > best:
+                best, best_doc = score, doc["id"]
+        per_query.append({"query": item["query"],
+                          "expectedDoc": item["expectedDocId"],
+                          "gotDoc": best_doc,
+                          "correct": best_doc == item["expectedDocId"]})
+    correct = sum(1 for p in per_query if p["correct"])
+    return {"total": len(per_query), "correct": correct,
+            "recallAt1": round(correct / len(per_query) * 100, 1),
             "perQuery": per_query}
 
 

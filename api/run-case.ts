@@ -15,6 +15,9 @@
 import { planRun } from '../src/lib/engine';
 import { GroqClient, groundingQueryForCaseType } from '../src/lib/groq';
 import type { AppState, Case } from '../src/lib/types';
+import { enforceRateLimit, jsonError } from '../src/lib/api-utils';
+import { stateTraceForRun } from '../src/lib/agent';
+import { redactPII } from '../src/lib/redact';
 
 const GROQ_MODEL = 'openai/gpt-oss-120b';
 
@@ -27,10 +30,15 @@ function groundingQueries(caseType: string): string[] {
 }
 
 export default async function handler(req: any, res: any): Promise<void> {
-  if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed. Use POST.' }); return; }
+  const runId = `RUN-${Date.now().toString(36)}${Math.floor(Math.random() * 1000).toString(36)}`;
+  const traceId = `TRC-${Date.now().toString(36)}${Math.floor(Math.random() * 0xffffff).toString(36)}`;
+  const t0 = Date.now();
+  try {
+  if (req.method !== 'POST') { jsonError(res, 405, 'Method not allowed. Use POST.'); return; }
+  if (!enforceRateLimit(req, res)) return;
   const body = req.body ?? {};
   const c = body.case as Case | undefined;
-  if (!c || !c.id || !c.customerId) { res.status(400).json({ error: 'Body must include case { id, customerId, type, amount, idempotencyKey }.' }); return; }
+  if (!c || !c.id || !c.customerId) { jsonError(res, 400, 'Body must include case { id, customerId, type, amount, idempotencyKey }.'); return; }
   const state = {
     customers: body.customers ?? [], ledger: body.ledger ?? [], usage: body.usage ?? [],
     tickets: body.tickets ?? [], cases: body.cases ?? [c], runs: [], docs: body.docs ?? [],
@@ -72,17 +80,41 @@ export default async function handler(req: any, res: any): Promise<void> {
     }
   }
 
+  // Redact phone/email from step details before responding, and map the
+  // run onto the explicit agent state machine (see src/lib/agent.ts).
+  const steps = plan.steps.map((s) => ({ ...s, detail: redactPII(s.detail) }));
+  const agentStateTrace = stateTraceForRun({
+    id: runId, caseId: c.id, traceId, startedAt: new Date().toISOString(),
+    status: plan.failureReason ? 'failed' : 'awaiting_approval',
+    steps: plan.steps.map((s) => ({ ...s, ms: 0, status: s.status })),
+    proposedCredit: plan.proposedCredit, creditApplied: null, agentMs: null,
+    idempotencyKey: c.idempotencyKey,
+  });
   res.status(200).json({
+    runId,
+    traceId,
+    durationMs: Date.now() - t0,
     caseId: c.id,
     status: plan.failureReason ? 'failed' : 'awaiting_approval',
     failureReason: plan.failureReason,
     proposedCredit: plan.proposedCredit,
     citation: plan.citation,
-    steps: plan.steps,
+    steps,
+    agentStateTrace,
     liveLlm,
     liveLeafPicks: liveLeafByQuery,
     liveSummary,
     llmModel: liveLlm === 'groq' ? GROQ_MODEL : null,
+    audit: {
+      id: `AUD-${runId.slice(4)}`, at: new Date().toISOString(), actor: 'agent',
+      action: plan.failureReason ? 'run_failed' : 'awaiting_approval',
+      detail: redactPII(plan.failureReason ?? `Plan proposed for ${c.id}`),
+      runId, durationMs: Date.now() - t0, traceId,
+    },
     note: 'Planning only. A credit is posted only after human approval in the app; this endpoint moves no money.',
   });
+  } catch (e) {
+    // Never a 500 HTML page and never an uncaught throw.
+    jsonError(res, 500, 'Run failed', e instanceof Error ? e.message : String(e));
+  }
 }

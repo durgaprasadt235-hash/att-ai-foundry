@@ -182,10 +182,18 @@ export function lineageForRecord(state: AppState, recordId: string, batchId: str
  *  the same logic on 106 demo records. A failed pipeline step is retried
  *  once; if it still fails, the batch records a failure card and the bad
  *  records go to quarantine instead of failing the whole batch. */
+/** Backpressure — bounded batch size. One incremental batch processes at
+ *  most this many new records; the rest are deferred to the next batch
+ *  (they stay un-watermarked, so nothing is dropped). At petabyte scale
+ *  this is what keeps a single batch from growing without bound; here the
+ *  seed is 106 records, so the limit never binds in the demo. */
+export const MEDALLION_BATCH_LIMIT = 1000;
+
 export function runMedallionBatch(
   state: AppState,
   batchId: string,
   watermark: Set<string>,
+  limit: number = MEDALLION_BATCH_LIMIT,
 ): MedallionBatchRun {
   const allIds = [
     ...state.customers.map((c) => c.id),
@@ -200,8 +208,11 @@ export function runMedallionBatch(
   // failure card is written. A failed pipeline never fails the batch —
   // its records are quarantined and the rest of the batch completes.
   const retries = 0;
-  for (const id of newIds) watermark.add(id);
-  return { batchId, newRecords: newIds.length, skippedRecords: allIds.length - newIds.length, retries, snapshot };
+  // Bounded batch: process at most `limit` new records; defer the rest.
+  const processed = newIds.slice(0, limit);
+  const deferredRecords = newIds.length - processed.length;
+  for (const id of processed) watermark.add(id);
+  return { batchId, newRecords: processed.length, skippedRecords: allIds.length - newIds.length, retries, deferredRecords, snapshot };
 }
 
 /** Default batch id for the demo: one batch per ingest date. At scale the

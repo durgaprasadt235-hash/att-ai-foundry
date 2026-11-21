@@ -126,3 +126,25 @@ def test_spark_job_reference_is_a_shape_not_an_execution():
     assert job["silver"]["partition"] == ["ingest_date", "customer_id"]
     assert "quarantine" in str(job["silver"]["rules"]).lower()
     assert job["ops"]["operator"] == "one person + GitHub Copilot"
+
+
+def test_incremental_batch_is_bounded_and_defers_the_rest():
+    """Backpressure: a batch processes at most `limit` new records; the
+    rest are deferred (never dropped) to the next batch."""
+    seed = load_seed()
+    watermark: set = set()
+    first = run_incremental_batch(seed, "B-2026-11-21", watermark, limit=2)
+    assert first["newRecords"] == 2
+    assert first["deferredRecords"] == 104
+    assert len(watermark) == 2
+    second = run_incremental_batch(seed, "B-2026-11-21", watermark, limit=2)
+    assert second["newRecords"] == 2
+    assert second["deferredRecords"] == 102
+    assert second["skippedRecords"] == 2
+
+
+def test_incremental_batch_default_limit_covers_the_seed():
+    seed = load_seed()
+    run = run_incremental_batch(seed, "B-2026-11-21", set())
+    assert run["newRecords"] == 106
+    assert run["deferredRecords"] == 0

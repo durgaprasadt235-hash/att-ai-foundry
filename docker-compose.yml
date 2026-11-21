@@ -1,0 +1,61 @@
+# AT&T AI Foundry — whole stack in one command.
+#   docker compose up            # API on :8000, web on :4173
+#   docker compose --profile with-db up   # also starts Postgres (reserved)
+#
+# The web container proxies /api/* to the api container, so the frontend
+# talks to the FastAPI backend on the same origin. In local (non-Docker)
+# dev the same proxy points at http://localhost:8000 — see vite.config.ts.
+#
+# The `db` service is RESERVED: Postgres runs so the fulfilment team can
+# wire it, but DATABASE_URL is not consumed by any code yet — /api/health
+# reports "configured but not yet wired" rather than pretending the
+# database is live. See docs/DEPLOYMENT.md.
+#
+# No secrets live in this file: API keys come from the environment
+# (.env at the repo root, never committed — see .env.example).
+
+services:
+  api:
+    build: ./server
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATASOURCE: ${DATASOURCE:-seed}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: sh -c "npm ci && npm run build && npm run preview -- --host 0.0.0.0 --port 4173"
+    ports:
+      - "4173:4173"
+    environment:
+      VITE_API_PROXY: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+
+  db:
+    profiles: ["with-db"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: att_foundry
+      POSTGRES_PASSWORD: att_foundry_dev_only
+      POSTGRES_DB: att_foundry
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

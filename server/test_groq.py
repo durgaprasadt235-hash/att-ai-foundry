@@ -172,3 +172,83 @@ def test_deterministic_default_is_unchanged():
     assert plan.live_llm == "off"
     assert plan.live_summary is None
     assert not any(s["id"] == "live-llm" for s in plan.steps)
+
+
+# ---------------- Circuit breaker (Phase 2, JD item 10) ----------------
+
+def _failing_urlopen(*args, **kwargs):
+    raise urllib.error.URLError("connection refused")
+
+
+def test_circuit_breaker_opens_after_three_failures(monkeypatch):
+    import groq_client as gc
+
+    gc.reset_groq_circuit()
+    client = GroqClient("gsk-test-key")
+    monkeypatch.setattr("urllib.request.build_opener",
+                        lambda *a, **k: _FailingOpener())
+    for _ in range(3):
+        with pytest.raises(GroqUnavailable):
+            client.chat([{"role": "user", "content": "hi"}])
+    assert gc.circuit_state() == "open"
+    # Fourth call fails fast WITHOUT touching the network (no opener use).
+    calls = {"n": 0}
+
+    class CountingOpener:
+        def open(self, *a, **k):
+            calls["n"] += 1
+            raise urllib.error.URLError("should not be called")
+
+    monkeypatch.setattr("urllib.request.build_opener",
+                        lambda *a, **k: CountingOpener())
+    with pytest.raises(GroqUnavailable, match="circuit breaker is open"):
+        client.chat([{"role": "user", "content": "hi"}])
+    assert calls["n"] == 0
+    gc.reset_groq_circuit()
+
+
+class _FailingOpener:
+    def open(self, *args, **kwargs):
+        raise urllib.error.URLError("connection refused")
+
+
+def test_circuit_breaker_half_open_trial_success_closes_it(monkeypatch):
+    import time
+
+    import groq_client as gc
+
+    gc.reset_groq_circuit()
+    client = GroqClient("gsk-test-key")
+    monkeypatch.setattr("urllib.request.build_opener",
+                        lambda *a, **k: _FailingOpener())
+    for _ in range(3):
+        with pytest.raises(GroqUnavailable):
+            client.chat([{"role": "user", "content": "hi"}])
+    assert gc.circuit_state() == "open"
+    # Cooldown elapsed: half-open, one trial call allowed.
+    gc._breaker["opened_at"] = time.monotonic() - 61
+    assert gc.circuit_state() == "half-open"
+    monkeypatch.setattr("urllib.request.build_opener",
+                        lambda *a, **k: _OkOpener())
+    assert client.chat([{"role": "user", "content": "hi"}]) == "ok"
+    assert gc.circuit_state() == "closed"
+    gc.reset_groq_circuit()
+
+
+class _OkOpener:
+    def open(self, *args, **kwargs):
+        resp = io.BytesIO(json.dumps(
+            {"choices": [{"message": {"content": "ok"}}]}).encode())
+        resp.status = 200
+        return _Ctx(resp)
+
+
+class _Ctx:
+    def __init__(self, resp):
+        self.resp = resp
+
+    def __enter__(self):
+        return self.resp
+
+    def __exit__(self, *a):
+        return False

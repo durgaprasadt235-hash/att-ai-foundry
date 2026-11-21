@@ -217,24 +217,40 @@ def lineage_for_record(state, record_id, batch_id):
     ]
 
 
-def run_incremental_batch(state, batch_id, watermark):
+# Backpressure — bounded batch size. One incremental batch processes at
+# most this many new records; the rest are deferred to the next batch
+# (they stay un-watermarked, so nothing is dropped). At petabyte scale
+# this is what keeps a single batch from growing without bound; here the
+# seed is 106 records, so the limit never binds in the demo.
+MEDALLION_BATCH_LIMIT = 1000
+
+
+def run_incremental_batch(state, batch_id, watermark,
+                          limit=MEDALLION_BATCH_LIMIT):
     """Incremental batch run with a watermark (set of already-processed
     record ids). Only records NOT in the watermark are validated again.
     A failed step is retried once; if it still fails, a failure card is
     written and the bad records go to quarantine instead of failing the
     whole batch. Retries are 0 in this deterministic demo — the retry
-    path exists for transient source failures (network, timeout)."""
+    path exists for transient source failures (network, timeout).
+
+    Bounded: at most `limit` new records are processed; the rest are
+    deferred (deferredRecords) to the next batch, never dropped.
+    """
     all_ids = ([c["id"] for c in state["customers"]]
                + [e["id"] for e in state["ledger"]]
                + [u["id"] for u in state["usage"]])
     new_ids = [i for i in all_ids if i not in watermark]
     snapshot = build_medallion(state, batch_id)
     retries = 0
-    for i in new_ids:
+    processed = new_ids[:limit]
+    deferred = len(new_ids) - len(processed)
+    for i in processed:
         watermark.add(i)
-    return {"batchId": batch_id, "newRecords": len(new_ids),
+    return {"batchId": batch_id, "newRecords": len(processed),
             "skippedRecords": len(all_ids) - len(new_ids),
-            "retries": retries, "snapshot": snapshot}
+            "retries": retries, "deferredRecords": deferred,
+            "snapshot": snapshot}
 
 
 def default_batch_id(state):

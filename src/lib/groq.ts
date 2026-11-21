@@ -36,6 +36,58 @@ export class GroqUnavailable extends Error {
   }
 }
 
+/* ---------------- Circuit breaker (resilience) ----------------
+ * After 3 consecutive Groq failures the breaker OPENS for 60s: no Groq
+ * call is attempted at all, and the caller serves the deterministic
+ * fallback and says so ("circuit open"). After the cooldown the breaker
+ * goes HALF-OPEN and allows one trial call: success closes it, failure
+ * re-opens it immediately. This stops a failing LLM from adding latency
+ * and errors to every run, and it stops the app hammering a dead API.
+ * State is module-level (per serverless instance); a cold start resets
+ * it to closed. Production breakers belong in the shared client, not
+ * per instance — the logic here is the same either way. */
+export type CircuitState = 'closed' | 'open' | 'half-open';
+const BREAKER_THRESHOLD = 3;
+const BREAKER_COOLDOWN_MS = 60_000;
+const breaker = { failures: 0, openedAt: null as number | null, halfOpen: false };
+
+export function groqCircuitState(): CircuitState {
+  if (breaker.openedAt === null) return breaker.halfOpen ? 'half-open' : 'closed';
+  if (Date.now() - breaker.openedAt < BREAKER_COOLDOWN_MS) return 'open';
+  // Cooldown elapsed: half-open, one trial call allowed.
+  breaker.openedAt = null;
+  breaker.halfOpen = true;
+  return 'half-open';
+}
+
+export function recordGroqSuccess(): void {
+  breaker.failures = 0;
+  breaker.openedAt = null;
+  breaker.halfOpen = false;
+}
+
+export function recordGroqFailure(): void {
+  if (breaker.halfOpen) {
+    // The trial call failed: re-open immediately.
+    breaker.openedAt = Date.now();
+    breaker.halfOpen = false;
+    return;
+  }
+  breaker.failures += 1;
+  if (breaker.failures >= BREAKER_THRESHOLD) {
+    breaker.openedAt = Date.now();
+    breaker.failures = 0;
+  }
+}
+
+/** Test/ops hook: reset the breaker (used by the health probe path and
+ *  by tests). Not a user-facing feature. */
+export function resetGroqCircuit(): void {
+  breaker.failures = 0;
+  breaker.openedAt = null;
+  breaker.halfOpen = false;
+}
+
 export interface GroqClientOptions {
   apiKey: string;
   model?: string;
@@ -56,6 +108,11 @@ export class GroqClient {
   }
 
   async chat(messages: { role: string; content: string }[], jsonMode = false, maxTokens = 300): Promise<string> {
+    // Circuit breaker: when open, do not call Groq at all — fail fast
+    // into the deterministic fallback instead of adding latency/errors.
+    if (groqCircuitState() === 'open') {
+      throw new GroqUnavailable('Groq circuit breaker is open (3 consecutive failures) — deterministic fallback for 60s');
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
     try {
@@ -81,9 +138,11 @@ export class GroqClient {
         throw new GroqUnavailable(`Groq returned HTTP ${res.status}: ${detail}`, res.status);
       }
       const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      recordGroqSuccess();
       return body.choices?.[0]?.message?.content ?? '';
     } catch (e) {
-      if (e instanceof GroqUnavailable) throw e;
+      if (e instanceof GroqUnavailable) { recordGroqFailure(); throw e; }
+      recordGroqFailure();
       throw new GroqUnavailable(`Groq request failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       clearTimeout(timer);
@@ -129,6 +188,31 @@ export class GroqClient {
       200,
     );
     return content.trim();
+  }
+}
+
+/** Lightweight liveness probe: GET /models with the key. True ONLY when
+ *  Groq answers 200 — a configured key that is revoked, expired, or
+ *  rate-limited returns false. Used by /api/health so `llm_live` means a
+ *  live Groq call succeeded, not merely that a key is configured. Cheap
+ *  (no completion tokens) and short-timeout; health caches the result. */
+export async function probeGroqLive(apiKey: string, timeoutMs = 5000): Promise<boolean> {
+  if (!apiKey) return false;
+  // Do not hammer a dead API: when the breaker is open the probe reports
+  // "not live" without calling Groq at all.
+  if (groqCircuitState() === 'open') return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${GROQ_BASE_URL}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': GROQ_USER_AGENT },
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

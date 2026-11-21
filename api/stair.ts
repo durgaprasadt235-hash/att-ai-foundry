@@ -9,11 +9,14 @@
 // back to deterministic STAIR and the response says so.
 import { stairAnswer } from '../src/lib/stair';
 import { GroqClient } from '../src/lib/groq';
+import { enforceRateLimit, jsonError } from '../src/lib/api-utils';
 
 export default async function handler(req: any, res: any): Promise<void> {
-  if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed. Use POST.' }); return; }
+  try {
+  if (req.method !== 'POST') { jsonError(res, 405, 'Method not allowed. Use POST.'); return; }
+  if (!enforceRateLimit(req, res)) return;
   const body = req.body ?? {};
-  if (!body.query || typeof body.query !== 'string') { res.status(400).json({ error: 'Body must include query (string).' }); return; }
+  if (!body.query || typeof body.query !== 'string') { jsonError(res, 400, 'Body must include query (string).'); return; }
   const trees = body.trees ?? [];
   let liveLlm = 'off';
   let liveLeafId: string | null = null;
@@ -39,4 +42,7 @@ export default async function handler(req: any, res: any): Promise<void> {
   }
   const result = stairAnswer(trees, body.query);
   res.status(200).json({ query: body.query, ...result, llm: liveLlm === 'groq', liveLlm, liveLeafId: null, chunking: false });
+  } catch (e) {
+    jsonError(res, 500, 'STAIR retrieval failed', e instanceof Error ? e.message : String(e));
+  }
 }

@@ -94,3 +94,20 @@ def test_measured_eval_has_zero_invalid_sections():
     # Recall is measured, not asserted at 100% — the test records it honestly.
     assert 0 <= result["recallAt1"] <= 100
     print(f"\nSTAIR measured Recall@1: {result['recallAt1']}% ({result['correct']}/10)")
+
+
+def test_chunk_baseline_eval_has_per_query_detail():
+    """Honest comparison: the chunk-RAG baseline is measured on the same
+    10 questions, per query, so the STAIR view can show both side by side."""
+    from stair_retriever import measure_chunk_rag_eval
+
+    seed = json.loads((Path(__file__).parent / "seed.json").read_text())
+    result = measure_chunk_rag_eval(seed["docs"])
+    assert result["total"] == 10
+    assert len(result["perQuery"]) == 10
+    assert 0 <= result["recallAt1"] <= 100
+    for row in result["perQuery"]:
+        assert set(row) == {"query", "expectedDoc", "gotDoc", "correct"}
+        assert row["correct"] is (row["gotDoc"] == row["expectedDoc"])
+    print(f"\nChunk-RAG baseline Recall@1: {result['recallAt1']}% "
+          f"({result['correct']}/10)")

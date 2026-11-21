@@ -48,6 +48,82 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise GroqUnavailable("Groq redirected the request; refusing to follow it")
 
 
+def probe_live(api_key: str, timeout_seconds: int = 5) -> bool:
+    """Lightweight liveness probe: GET /models with the key. True ONLY when
+    Groq answers 200 — a configured key that is revoked, expired, or
+    rate-limited returns False. Used by /health so `llm_live` means a live
+    Groq call succeeded, not merely that a key is configured."""
+    if not api_key:
+        return False
+    # Do not hammer a dead API: when the breaker is open the probe
+    # reports "not live" without calling Groq at all.
+    if circuit_state() == "open":
+        return False
+    request = urllib.request.Request(f"{BASE_URL}/models")
+    request.add_header("Authorization", f"Bearer {api_key}")
+    request.add_header("User-Agent", USER_AGENT)
+    try:
+        with urllib.request.build_opener(_NoRedirect()).open(
+                request, timeout=timeout_seconds) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
+# ---------------- Circuit breaker (resilience) ----------------
+# After 3 consecutive Groq failures the breaker OPENS for 60s: no Groq
+# call is attempted at all, and the caller serves the deterministic
+# fallback and says so ("circuit open"). After the cooldown the breaker
+# goes HALF-OPEN and allows one trial call: success closes it, failure
+# re-opens it immediately. State is module-level (per process); a
+# restart resets it to closed.
+BREAKER_THRESHOLD = 3
+BREAKER_COOLDOWN_SECONDS = 60
+_breaker = {"failures": 0, "opened_at": None, "half_open": False}
+
+
+def circuit_state() -> str:
+    """'closed' | 'open' | 'half-open'. A cooldown expiry moves the
+    breaker to half-open (one trial call allowed)."""
+    import time as _time
+
+    opened_at = _breaker["opened_at"]
+    if opened_at is None:
+        return "half-open" if _breaker["half_open"] else "closed"
+    if _time.monotonic() - opened_at < BREAKER_COOLDOWN_SECONDS:
+        return "open"
+    _breaker["opened_at"] = None
+    _breaker["half_open"] = True
+    return "half-open"
+
+
+def record_groq_success() -> None:
+    _breaker["failures"] = 0
+    _breaker["opened_at"] = None
+    _breaker["half_open"] = False
+
+
+def record_groq_failure() -> None:
+    import time as _time
+
+    if _breaker["half_open"]:
+        # The trial call failed: re-open immediately.
+        _breaker["opened_at"] = _time.monotonic()
+        _breaker["half_open"] = False
+        return
+    _breaker["failures"] += 1
+    if _breaker["failures"] >= BREAKER_THRESHOLD:
+        _breaker["opened_at"] = _time.monotonic()
+        _breaker["failures"] = 0
+
+
+def reset_groq_circuit() -> None:
+    """Test/ops hook: reset the breaker. Not a user-facing feature."""
+    _breaker["failures"] = 0
+    _breaker["opened_at"] = None
+    _breaker["half_open"] = False
+
+
 class GroqClient:
     """Minimal Groq chat client. Only two operations the agent needs:
     pick a STAIR leaf from an allowlist, and draft a customer summary."""
@@ -66,6 +142,12 @@ class GroqClient:
     def chat(self, messages: list[dict], json_mode: bool = False,
              max_tokens: int = 300) -> str:
         """One chat completion. Returns the assistant's text content."""
+        # Circuit breaker: when open, do not call Groq at all — fail fast
+        # into the deterministic fallback instead of adding latency/errors.
+        if circuit_state() == "open":
+            raise GroqUnavailable(
+                "Groq circuit breaker is open (3 consecutive failures) — "
+                "deterministic fallback for 60s")
         payload: dict = {
             "model": self.model,
             "messages": messages,
@@ -89,14 +171,19 @@ class GroqClient:
                 body = json.loads(response.read().decode())
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", errors="replace")[:500]
+            record_groq_failure()
             raise GroqUnavailable(
                 f"Groq returned HTTP {e.code}: {detail}", status=e.code) from e
         except (urllib.error.URLError, TimeoutError) as e:
+            record_groq_failure()
             raise GroqUnavailable(f"Groq request failed: {e}") from e
         try:
-            return body["choices"][0]["message"]["content"] or ""
+            content = body["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError) as e:
+            record_groq_failure()
             raise GroqUnavailable("Groq returned an unexpected response shape") from e
+        record_groq_success()
+        return content
 
     def pick_leaf(self, query: str, leaves: list[dict]) -> str:
         """Ask Groq to pick one STAIR leaf for a query, from the TOC

@@ -3,6 +3,12 @@
 //
 //  * No chunking, no embeddings, no vector database. Knowledge docs are stored
 //    as structured trees: a Table of Contents, sections, and leaf nodes.
+//    No vector DB by design: STAIR needs none — retrieval navigates a TOC,
+//    it does not search an embedding space. The adapter interface where
+//    embeddings would plug in, if the fulfilment team ever wants them, is
+//    stairRetrieve() below: replace its token-overlap scoring with an
+//    embedding lookup over the same leaf titles, keep the allowlist, and
+//    the contract (only a TOC leaf may be returned) is unchanged.
 //  * Retrieval is given the FULL Table of Contents and navigates to the exact
 //    leaf section. The answer comes ONLY from that leaf, retrieved intact.
 //  * Constrained selection: the retriever may only return a leaf title that
@@ -124,10 +130,11 @@ export function measureStairEval(trees: StairTree[]): StairEvalResult {
 
 /** Chunk-RAG baseline recall on the same queries, for the side-by-side
  *  comparison: the baseline retrieves a whole doc, so it is credited only
- *  when its top doc is the doc that contains the expected answer. */
-export function measureChunkRagEval(docs: PolicyDoc[], _trees: StairTree[]): { total: number; correct: number; recallAt1: number } {
-  let correct = 0;
-  for (const { query, expectedDocId } of STAIR_EVAL_SET) {
+ *  when its top doc is the doc that contains the expected answer.
+ *  Per-query detail is included so the STAIR view can show, for each of
+ *  the 10 questions, what STAIR got AND what the baseline got. */
+export function measureChunkRagEval(docs: PolicyDoc[], _trees: StairTree[]): { total: number; correct: number; recallAt1: number; perQuery: { query: string; expectedDoc: string; gotDoc: string | null; correct: boolean }[] } {
+  const perQuery = STAIR_EVAL_SET.map(({ query, expectedDocId }) => {
     const q = [...new Set(tokenize(query))];
     let bestDoc: string | null = null;
     let best = 0;
@@ -136,7 +143,8 @@ export function measureChunkRagEval(docs: PolicyDoc[], _trees: StairTree[]): { t
       const score = q.filter((t) => hay.includes(t)).length / Math.max(1, q.length);
       if (score > best) { best = score; bestDoc = d.id; }
     }
-    if (bestDoc === expectedDocId) correct += 1;
-  }
-  return { total: STAIR_EVAL_SET.length, correct, recallAt1: Math.round((correct / STAIR_EVAL_SET.length) * 1000) / 10 };
+    return { query, expectedDoc: expectedDocId, gotDoc: bestDoc, correct: bestDoc === expectedDocId };
+  });
+  const correct = perQuery.filter((p) => p.correct).length;
+  return { total: STAIR_EVAL_SET.length, correct, recallAt1: Math.round((correct / STAIR_EVAL_SET.length) * 1000) / 10, perQuery };
 }
