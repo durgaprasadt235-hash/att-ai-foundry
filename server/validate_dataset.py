@@ -12,6 +12,10 @@ before a meeting.
 
 Exit code 0 = valid (warnings may still be listed), 1 = invalid.
 Nothing is loaded, fixed, or written anywhere — this only reports.
+Validation is a pre-check, not a gate: a file with errors is accepted
+raw and cleansed automatically by server/cleanse.py (Bronze → Silver),
+which implements the same D1–D12 checks with the cleansing rules
+CL1–CL8. The validator itself never rewrites anything.
 
 Rules (see src/lib/dataset.ts for the full text):
   D1  required tables present as arrays; optional tables default to []
@@ -24,7 +28,8 @@ Rules (see src/lib/dataset.ts for the full text):
   D7  balance reconciliation: sum of POSTED ledger amounts (amounts are
       positive magnitudes; kind decides the sign — charge adds, credit
       and payment subtract) must equal the stated balance within $0.01.
-      Listed, never silently fixed.
+      Listed. The cleanser corrects it on load (ledger is the source
+      of truth) and records the correction — the validator never does.
   D8  (warning) case amount matches no posted ledger entry for the customer
   D9  (warning) duplicate charges found (same customer/service/amount,
       within 7 days, different invoice)
@@ -121,33 +126,45 @@ def _empty():
     }
 
 
-def validate_dataset(data):
-    """Validate parsed dataset data. Returns (validation_dict, tables or
-    None). Tables is None unless the dataset is valid."""
-    v = _empty()
-    if not isinstance(data, dict):
-        v["errors"].append(
-            "D1: dataset must be a JSON object with customers, ledger, "
-            "usage and cases arrays.")
-        return v, None
+def parse_tables(data):
+    """D1 only: parse the top-level structure into the 8 tables.
 
+    Returns (tables, errors). Tables always has all 8 keys; when errors
+    is non-empty the tables may be partially populated and must not be
+    used — the file is structurally unusable (nothing to cleanse).
+    The cleanser (server/cleanse.py) starts from these raw tables.
+    """
     tables = {"customers": [], "ledger": [], "usage": [], "tickets": [],
               "cases": [], "docs": [], "orders": [], "stairTrees": []}
-    # D1 — required tables present and arrays; optional default [].
+    errors = []
+    if not isinstance(data, dict):
+        errors.append(
+            "D1: dataset must be a JSON object with customers, ledger, "
+            "usage and cases arrays.")
+        return tables, errors
     for key in ("customers", "ledger", "usage", "cases"):
         if not isinstance(data.get(key), list):
-            v["errors"].append(
+            errors.append(
                 f'D1: "{key}" is missing or not an array — it is required.')
         else:
             tables[key] = data[key]
     for key in ("tickets", "docs", "orders", "stairTrees"):
         if key in data:
             if not isinstance(data[key], list):
-                v["errors"].append(
+                errors.append(
                     f'D1: "{key}" must be an array when present.')
             else:
                 tables[key] = data[key]
-    if v["errors"]:
+    return tables, errors
+
+
+def validate_dataset(data):
+    """Validate parsed dataset data. Returns (validation_dict, tables or
+    None). Tables is None unless the dataset is valid."""
+    v = _empty()
+    tables, d1_errors = parse_tables(data)
+    if d1_errors:
+        v["errors"].extend(d1_errors)
         return v, None
 
     # D2 — at least one customer.
@@ -352,8 +369,9 @@ def validate_dataset(data):
             v["errors"].append(
                 f'D7: balance does not reconcile for {c["id"]} '
                 f'({c.get("name")}): stated ${c["balance"]:.2f}, ledger sums '
-                f'to ${computed:.2f}. Fix the balance or the ledger — it is '
-                "not corrected here.")
+                f'to ${computed:.2f}. The cleanser corrects the balance to '
+                f'${computed:.2f} on load (ledger is the source of truth) — '
+                "see the cleansing report.")
 
     # D8 — case amount with no matching ledger entry (warning only).
     for c in tables["cases"]:
@@ -459,16 +477,21 @@ def _csv_num(raw, label, errors):
         return None
 
 
-def validate_dataset_csv_files(files):
-    """Validate CSV files: {filename: text}. Same result shape as
-    validate_dataset. Filenames pick the table (customers.csv, ...)."""
-    v = _empty()
+def csv_files_to_data(files):
+    """Assemble CSV files ({filename: text}) into the dataset dict (the
+    same shape as a JSON file). Returns (data, errors). data is None
+    only when the CSVs are structurally unusable (unrecognised file,
+    missing header column, missing required table). A bad number leaves
+    a None in that row and is listed in errors — the cleanser
+    (server/cleanse.py) quarantines that row instead of the whole file
+    being unusable."""
+    errors = []
     by_table = {}
     for name, text in files.items():
         stem = Path(name).stem.lower()
         if stem not in CSV_HEADERS:
             expected = ", ".join(f"{k}.csv" for k in CSV_HEADERS)
-            v["errors"].append(
+            errors.append(
                 f'CSV: unrecognised file "{name}" — expected one of '
                 f"{expected}.")
             continue
@@ -477,7 +500,7 @@ def validate_dataset_csv_files(files):
             headers = [h.strip() if h else h for h in (reader.fieldnames or [])]
             missing = [h for h in CSV_HEADERS[stem] if h not in headers]
             if missing:
-                v["errors"].append(
+                errors.append(
                     f"CSV: {name} is missing header column(s): "
                     f"{', '.join(missing)}. Expected: "
                     f"{', '.join(CSV_HEADERS[stem])}.")
@@ -485,14 +508,14 @@ def validate_dataset_csv_files(files):
             by_table[stem] = [dict(r) for r in reader if any(
                 (val or "").strip() for val in r.values() if val is not None)]
         except csv.Error as exc:
-            v["errors"].append(f"CSV: {name} could not be parsed — {exc}.")
+            errors.append(f"CSV: {name} could not be parsed — {exc}.")
     for required in ("customers", "ledger", "usage", "cases"):
         if required not in by_table:
-            v["errors"].append(
+            errors.append(
                 f'D1: "{required}.csv" was not uploaded — customers, '
                 "ledger, usage and cases are all required.")
-    if v["errors"]:
-        return v, None
+    if errors:
+        return None, errors
 
     data = {
         "customers": [{
@@ -502,7 +525,7 @@ def validate_dataset_csv_files(files):
             "status": r.get("status"), "since": r.get("since"),
             "balance": _csv_num(r.get("balance"),
                                 f'customer {r.get("id") or "?"} balance',
-                                v["errors"]),
+                                errors),
             "city": r.get("city"),
         } for r in by_table.get("customers", [])],
         "ledger": [{
@@ -511,7 +534,7 @@ def validate_dataset_csv_files(files):
             "service": r.get("service"),
             "amount": _csv_num(r.get("amount"),
                                f'ledger {r.get("id") or "?"} amount',
-                               v["errors"]),
+                               errors),
             "kind": r.get("kind"), "status": r.get("status"),
         } for r in by_table.get("ledger", [])],
         "usage": [{
@@ -519,12 +542,12 @@ def validate_dataset_csv_files(files):
             "month": r.get("month"),
             "dataGb": _csv_num(r.get("dataGb"),
                                f'usage {r.get("id") or "?"} dataGb',
-                               v["errors"]),
+                               errors),
             "minutes": _csv_num(r.get("minutes"),
                                 f'usage {r.get("id") or "?"} minutes',
-                                v["errors"]),
+                                errors),
             "sms": _csv_num(r.get("sms"),
-                            f'usage {r.get("id") or "?"} sms', v["errors"]),
+                            f'usage {r.get("id") or "?"} sms', errors),
         } for r in by_table.get("usage", [])],
         "cases": [{
             "id": r.get("id"), "customerId": r.get("customerId"),
@@ -532,7 +555,7 @@ def validate_dataset_csv_files(files):
             "description": r.get("description"),
             "amount": _csv_num(r.get("amount"),
                                f'case {r.get("id") or "?"} amount',
-                               v["errors"]),
+                               errors),
             "status": r.get("status") or None,
             "createdAt": r.get("createdAt") or None,
             "idempotencyKey": r.get("idempotencyKey") or None,
@@ -544,7 +567,16 @@ def validate_dataset_csv_files(files):
         } for r in by_table.get("tickets", [])],
         "docs": [], "orders": [], "stairTrees": [],
     }
-    if v["errors"]:
+    return data, errors
+
+
+def validate_dataset_csv_files(files):
+    """Validate CSV files: {filename: text}. Same result shape as
+    validate_dataset. Filenames pick the table (customers.csv, ...)."""
+    v = _empty()
+    data, errors = csv_files_to_data(files)
+    if errors:
+        v["errors"].extend(errors)
         return v, None
     return validate_dataset(data)
 

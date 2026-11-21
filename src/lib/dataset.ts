@@ -17,8 +17,13 @@
 //
 // Validation rules D1–D12 — the Python mirror (server/validate_dataset.py)
 // implements the SAME rules with the SAME numbering, so a file that passes
-// here passes there. An invalid file is rejected with the exact errors;
-// nothing is half-loaded. Warnings never block a load, but they are shown.
+// here passes there. Validation is a PRE-CHECK, not a gate: a file with
+// errors is NOT rejected. It is accepted raw and cleansed automatically
+// (see lib/cleanse.ts — Bronze → Silver): balances are recomputed from
+// the ledger, unfixable records are quarantined and listed, and the
+// cleansed file is what loads. The validator itself never rewrites
+// anything; the cleanser fixes and LISTS every correction. Warnings
+// never block a load, but they are shown.
 //
 //   D1  Top level is an object; customers, ledger, usage, cases are
 //       present arrays. Optional tables default to [].
@@ -36,7 +41,10 @@
 //       ledger amounts must equal the stated balance within $0.01.
 //       Amounts are positive magnitudes — kind decides the sign:
 //       charge adds, credit and payment subtract (see signedLedgerAmount).
-//       A mismatch is an error and is LISTED, never silently fixed.
+//       A mismatch is an error and is LISTED. The validator never
+//       rewrites a balance; the cleanser (lib/cleanse.ts) corrects it
+//       on load — ledger is the source of truth — and records the
+//       correction in the cleansing report.
 //   D8  Case amount: warning when no posted ledger entry for that
 //       customer has the same amount — the case may still run and fail
 //       honestly, but the director should know before the call.
@@ -143,12 +151,16 @@ function emptyValidation(): DatasetValidation {
 }
 
 /** Validate parsed JSON data. Returns the validation plus, when valid,
- *  the normalised tables (defaults applied, filled fields listed). */
-export function validateDatasetJson(data: unknown): { validation: DatasetValidation; tables: DatasetTables | null } {
+ *  the normalised tables (defaults applied, filled fields listed).
+ *  `rawTables` is the parsed tables whenever the file is structurally
+ *  sound (D1 passed) — even when validation fails. The cleanser
+ *  (lib/cleanse.ts) starts from rawTables; `tables` stays null unless
+ *  the file is valid, so existing callers are unaffected. */
+export function validateDatasetJson(data: unknown): { validation: DatasetValidation; tables: DatasetTables | null; rawTables: DatasetTables | null } {
   const v = emptyValidation();
   if (!isObj(data)) {
     v.errors.push('D1: dataset must be a JSON object with customers, ledger, usage and cases arrays.');
-    return { validation: v, tables: null };
+    return { validation: v, tables: null, rawTables: null };
   }
   const tables: DatasetTables = {
     customers: [], ledger: [], usage: [], tickets: [], cases: [], docs: [], orders: [], stairTrees: [],
@@ -169,7 +181,7 @@ export function validateDatasetJson(data: unknown): { validation: DatasetValidat
       tables[key] = data[key] as never;
     }
   }
-  if (v.errors.length > 0) return { validation: v, tables: null };
+  if (v.errors.length > 0) return { validation: v, tables: null, rawTables: null };
 
   // D2 — at least one customer.
   if (tables.customers.length === 0) v.errors.push('D2: dataset has no customers — at least 1 is required.');
@@ -284,7 +296,7 @@ export function validateDatasetJson(data: unknown): { validation: DatasetValidat
       .reduce((s, e) => s + signedLedgerAmount(e), 0);
     if (Math.abs(computed - c.balance) >= 0.01) {
       v.balanceMismatches.push({ customerId: c.id, name: c.name, stated: c.balance, computed: Math.round(computed * 100) / 100 });
-      v.errors.push(`D7: balance does not reconcile for ${c.id} (${c.name}): stated $${c.balance.toFixed(2)}, ledger sums to $${computed.toFixed(2)}. Fix the balance or the ledger — it is not corrected here.`);
+      v.errors.push(`D7: balance does not reconcile for ${c.id} (${c.name}): stated $${c.balance.toFixed(2)}, ledger sums to $${computed.toFixed(2)}. The cleanser corrects the balance to $${computed.toFixed(2)} on load (ledger is the source of truth) — see the cleansing report.`);
     }
   }
 
@@ -351,7 +363,7 @@ export function validateDatasetJson(data: unknown): { validation: DatasetValidat
     orders: tables.orders.length, stairTrees: tables.stairTrees.length,
   };
   v.valid = v.errors.length === 0;
-  return { validation: v, tables: v.valid ? tables : null };
+  return { validation: v, tables: v.valid ? tables : null, rawTables: tables };
 }
 
 /* ---------------- CSV ----------------
@@ -417,8 +429,12 @@ const csvNum = (raw: string, label: string, errors: string[]): number | null => 
 };
 
 /** Assemble a dataset from CSV files ({ filename, text }[]). Returns the
- *  same validation shape as validateDatasetJson. */
-export function datasetFromCsvFiles(files: { name: string; text: string }[]): { validation: DatasetValidation; tables: DatasetTables | null } {
+ *  same validation shape as validateDatasetJson. `rawTables` is the
+ *  assembled data whenever the CSVs parsed and all required tables are
+ *  present — even when a row has a bad number (the cleanser quarantines
+ *  that row). It is null only when the CSVs are structurally unusable
+ *  (unrecognised file, missing header, missing required table). */
+export function datasetFromCsvFiles(files: { name: string; text: string }[]): { validation: DatasetValidation; tables: DatasetTables | null; rawTables: DatasetTables | null } {
   const v = emptyValidation();
   const byTable = new Map<string, Record<string, string>[]>();
   for (const f of files) {
@@ -443,7 +459,7 @@ export function datasetFromCsvFiles(files: { name: string; text: string }[]): { 
   for (const required of ['customers', 'ledger', 'usage', 'cases']) {
     if (!byTable.has(required)) v.errors.push(`D1: "${required}.csv" was not uploaded — customers, ledger, usage and cases are all required.`);
   }
-  if (v.errors.length > 0) return { validation: v, tables: null };
+  if (v.errors.length > 0) return { validation: v, tables: null, rawTables: null };
 
   const data: Record<string, unknown> = {
     customers: (byTable.get('customers') ?? []).map((r) => ({
@@ -471,7 +487,11 @@ export function datasetFromCsvFiles(files: { name: string; text: string }[]): { 
     })),
     docs: [], orders: [], stairTrees: [],
   };
-  if (v.errors.length > 0) return { validation: v, tables: null };
+  // A bad number leaves a null in the assembled row (csvNum records the
+  // D4 error above). The row is still handed to the cleanser as raw
+  // material — it quarantines the row and lists it, instead of the whole
+  // file being unusable.
+  if (v.errors.length > 0) return { validation: v, tables: null, rawTables: data as unknown as DatasetTables };
   return validateDatasetJson(data);
 }
 
@@ -479,8 +499,11 @@ export function datasetFromCsvFiles(files: { name: string; text: string }[]): { 
 
 /** Build a fresh working state from validated tables. Runs, pipeline runs,
  *  evals and notifications start empty — the new dataset is a fresh
- *  caseload. The built-in seed files on disk are never touched. */
-export function datasetToState(tables: DatasetTables, name: string): AppState {
+ *  caseload. The built-in seed files on disk are never touched.
+ *  `cleanseSummary` is passed when the tables came out of the cleanser
+ *  (lib/cleanse.ts) — it is recorded in the audit entry so the load is
+ *  traceable to its corrections and quarantines. */
+export function datasetToState(tables: DatasetTables, name: string, cleanseSummary?: string): AppState {
   const seed = seedState();
   const now = new Date().toISOString();
   return {
@@ -497,8 +520,8 @@ export function datasetToState(tables: DatasetTables, name: string): AppState {
     pipelineRuns: [],
     evalRuns: [],
     audit: [{
-      id: `AUD-${Date.now().toString(36)}`, at: now, actor: 'system', action: 'dataset_loaded', operatorId: getCurrentOperatorId(),
-      detail: `Loaded dataset "${name}": ${tables.customers.length} customers, ${tables.ledger.length} ledger entries, ${tables.usage.length} usage records, ${tables.cases.length} cases. Previous caseload replaced; built-in seed untouched.`,
+      id: `AUD-${Date.now().toString(36)}`, at: now, actor: 'system', action: cleanseSummary ? 'dataset_cleansed' : 'dataset_loaded', operatorId: getCurrentOperatorId(),
+      detail: `Loaded dataset "${name}": ${tables.customers.length} customers, ${tables.ledger.length} ledger entries, ${tables.usage.length} usage records, ${tables.cases.length} cases. Previous caseload replaced; built-in seed untouched.${cleanseSummary ? ` ${cleanseSummary}` : ''}`,
     }],
     notifications: [],
     events: [],
@@ -506,6 +529,35 @@ export function datasetToState(tables: DatasetTables, name: string): AppState {
     datasetName: name,
     datasetSource: 'uploaded',
   };
+}
+
+/** Serialise tables back to the production-ready JSON file — the same
+ *  shape as test-data.json / server/seed.json, so the cleansed file can
+ *  be handed to the fulfilment team or used as a new seed. */
+export function datasetTablesToJson(tables: DatasetTables): string {
+  return JSON.stringify({
+    customers: tables.customers,
+    ledger: tables.ledger,
+    usage: tables.usage,
+    tickets: tables.tickets,
+    cases: tables.cases,
+    docs: tables.docs,
+    orders: tables.orders,
+    stairTrees: tables.stairTrees,
+  }, null, 2);
+}
+
+/** Serialise one CSV table from cleansed tables — same headers and
+ *  quoting as the CSV templates, so the file round-trips through the
+ *  CSV upload path. Docs and STAIR trees are JSON-only. */
+export function datasetTableToCsv(table: keyof typeof CSV_HEADERS, tables: DatasetTables): string {
+  const headers = CSV_HEADERS[table];
+  const rows = ((tables as unknown as Record<string, unknown[]>)[table] ?? []) as Record<string, unknown>[];
+  const lines = [headers.join(',')];
+  for (const row of rows) {
+    lines.push(headers.map((h) => csvCell(row[h] == null ? '' : row[h] as string | number)).join(','));
+  }
+  return lines.join('\n') + '\n';
 }
 
 /* ---------------- Templates ----------------

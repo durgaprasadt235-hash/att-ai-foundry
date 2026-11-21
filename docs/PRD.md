@@ -395,15 +395,31 @@ therefore runs on a sample file:
   `ledger.csv`, `usage.csv`, `cases.csv`, `tickets.csv` optional).
 - **Validate:** rules D1–D12 (`src/lib/dataset.ts`, mirrored in
   `server/validate_dataset.py`): required tables, unique ids, enums,
-  references resolving, balances reconciling to the cent. Errors block
-  the load with the exact record and rule; warnings (duplicate charges,
-  unmatched case amounts) are shown, not hidden; auto-filled fields are
-  listed, never silent.
-- **Test:** the loaded dataset replaces the working caseload in browser
+  references resolving, balances reconciling to the cent. The report is
+  a pre-check, not a gate — issues are listed with the exact record and
+  rule; warnings (duplicate charges, unmatched case amounts) are shown,
+  not hidden; auto-filled fields are listed, never silent.
+- **Cleanse:** a file uploads anyway, raw or cleansed — that is the
+  process. **Load raw & cleanse automatically** runs rules CL1–CL8
+  (`src/lib/cleanse.ts`, mirrored in `server/cleanse.py`): duplicate ids
+  keep the first occurrence, invalid records and dangling references are
+  quarantined and listed, balances are recomputed from the ledger
+  (ledger is the source of truth) with old → new recorded, duplicate
+  charges / suspended-with-balance / zero-amount entries are kept and
+  noted. The cleansed tables are re-validated (0 errors) before they
+  load; if they still fail, the cleanse is refused with the remaining
+  errors listed. Only a structurally unusable file (missing required
+  table, unparseable CSV, no customers, over 5 MB) refuses a load.
+- **Take the production-ready file:** the cleansing report offers
+  **Download production-ready dataset (.json)** (same shape as
+  `test-data.json`, ready for the fulfilment team or as a new seed) and
+  per-table CSVs. The same cleanse runs on the command line:
+  `python3 server/cleanse.py your-sample.json your-sample.cleansed.json`.
+- **Test:** the loaded (cleansed) dataset replaces the working caseload in browser
   state (localStorage); Dashboard, Cases, Medallion and Pipelines all
   recompute from it. **Reset to original dataset** restores the built-in
   seed. The file never leaves the browser and never touches the seed
-  files on disk.
+  files on disk, and the raw file is never modified.
 - **Prepare:** `docs/DATASET_GUIDE.md` — what to export, how to
   anonymise names/phones/emails while keeping real amounts and
   relationships, what a good sample looks like (10–20 customers, a few

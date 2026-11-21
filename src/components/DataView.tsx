@@ -3,8 +3,18 @@
 // The first call with a director runs on a sample file, not on live
 // company data: nobody connects a live system into someone else's working
 // environment on a first call, and a live connection takes days to weeks.
-// Here the director's team uploads a sample file, sees the validation
+// Here the director's team uploads a sample file, reads the validation
 // report, and tests with it in minutes.
+//
+// The upload process: a file is uploaded anyway, raw or cleansed —
+// that IS the process. The validation report (rules D1–D12) is a
+// pre-check, not a gate: a file with errors is accepted raw and
+// cleansed automatically (lib/cleanse.ts — Bronze → Silver). Balances
+// are recomputed from the ledger, unfixable records are quarantined
+// and listed, and the cleansed dataset is what loads — a
+// production-ready file the team can also download. Every correction
+// and quarantine is listed in the cleansing report; nothing is fixed
+// or dropped silently, and the raw file is never modified.
 //
 // Privacy: files are read with FileReader in this browser only. Nothing
 // is uploaded to any server — the dataset never leaves this device, and
@@ -14,10 +24,13 @@
 // seed.
 import { useRef, useState } from 'react';
 import type { AppState } from '../lib/types';
+import { cleanseSummary, cleanseTables, type CleanseReport } from '../lib/cleanse';
 import {
   CSV_HEADERS,
   DATASET_MAX_BYTES,
   datasetFromCsvFiles,
+  datasetTableToCsv,
+  datasetTablesToJson,
   datasetToState,
   templateCsv,
   templateDatasetJson,
@@ -44,6 +57,10 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
 }) {
   const [validation, setValidation] = useState<DatasetValidation | null>(null);
   const [tables, setTables] = useState<DatasetTables | null>(null);
+  const [rawTables, setRawTables] = useState<DatasetTables | null>(null);
+  const [cleanseReport, setCleanseReport] = useState<CleanseReport | null>(null);
+  const [cleansedTables, setCleansedTables] = useState<DatasetTables | null>(null);
+  const [cleanseBlocked, setCleanseBlocked] = useState('');
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -57,6 +74,10 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
     setError('');
     setValidation(null);
     setTables(null);
+    setRawTables(null);
+    setCleanseReport(null);
+    setCleansedTables(null);
+    setCleanseBlocked('');
     const picked: { name: string; text: string }[] = [];
     for (const f of Array.from(list)) {
       const lower = f.name.toLowerCase();
@@ -83,16 +104,18 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
         setError(`"${jsonFile.name}" is not valid JSON: ${e instanceof Error ? e.message : String(e)}`);
         return;
       }
-      const { validation: v, tables: t } = validateDatasetJson(parsed);
+      const { validation: v, tables: t, rawTables: rt } = validateDatasetJson(parsed);
       setValidation(v);
       setTables(t);
+      setRawTables(rt);
       return;
     }
     const csvs = picked.filter((p) => p.name.toLowerCase().endsWith('.csv'));
     if (csvs.length > 0) {
-      const { validation: v, tables: t } = datasetFromCsvFiles(csvs);
+      const { validation: v, tables: t, rawTables: rt } = datasetFromCsvFiles(csvs);
       setValidation(v);
       setTables(t);
+      setRawTables(rt);
       return;
     }
     setError('No .json or .csv file was selected.');
@@ -107,6 +130,36 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
     // selection cleared after load
     setValidation(null);
     setTables(null);
+    setRawTables(null);
+    setFileName('');
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  // Raw upload, auto-cleansed: the file is accepted as-is, the cleanser
+  // (lib/cleanse.ts) turns it into the production-ready dataset, and
+  // THAT is what loads. The cleansing report stays on screen with the
+  // download buttons, so the team can take the production-ready file
+  // with them. Nothing is loaded if the file cannot be cleansed.
+  const loadCleanse = () => {
+    if (!validation || !rawTables) return;
+    const { cleansed, report } = cleanseTables(rawTables);
+    setCleanseReport(report);
+    if (!report.canCleanse || !cleansed) {
+      setCleanseBlocked(report.blockedReason ?? 'This file cannot be cleansed automatically.');
+      return;
+    }
+    setCleanseBlocked('');
+    setCleansedTables(cleansed);
+    const name = `${fileName || 'Uploaded dataset'} (cleansed)`;
+    const summary = cleanseSummary(report);
+    const next = datasetToState(cleansed, name, summary);
+    onLoadDataset(next, name);
+    audit('human', 'dataset_cleansed', `Loaded raw dataset "${fileName || 'Uploaded dataset'}" after automatic cleansing: ${summary}`);
+    // The file selection is cleared, but the cleansing report and the
+    // production-ready download stay visible below.
+    setValidation(null);
+    setTables(null);
+    setRawTables(null);
     setFileName('');
     if (inputRef.current) inputRef.current.value = '';
   };
@@ -116,8 +169,11 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
       <h1>Data — bring your own dataset</h1>
       <p className="muted">
         No live connection is needed for a first call. Bring an anonymised sample file, upload it here,
-        check the validation report, and test with it in minutes. A live connection to AT&amp;T systems
-        is a separate step that takes days to weeks — see <code>docs/DATASET_GUIDE.md</code>.
+        check the validation report, and test with it in minutes. A file uploads anyway — raw or
+        cleansed, that is the process: raw data is cleansed automatically (balances recomputed from
+        the ledger, unfixable records quarantined and listed) and comes out as a production-ready file.
+        A live connection to AT&amp;T systems is a separate step that takes days to weeks — see{' '}
+        <code>docs/DATASET_GUIDE.md</code>.
       </p>
 
       <div className="panel">
@@ -164,22 +220,28 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
 
         {validation && (
           <div className="mt">
-            <h3>Validation report — {validation.valid ? 'valid, ready to load' : 'rejected, fix the errors first'}</h3>
+            <h3>Validation report — {validation.valid ? 'valid, ready to load' : 'raw file accepted — cleansing report'}</h3>
             <p className="small">
               {validation.counts.customers} customers · {validation.counts.ledger} ledger entries ·{' '}
               {validation.counts.usage} usage records · {validation.counts.tickets} tickets ·{' '}
               {validation.counts.cases} cases · {validation.counts.docs} policy docs ·{' '}
               {validation.counts.stairTrees} STAIR trees
             </p>
+            <p className="small muted">
+              This report is a pre-check, not a gate. A file with errors is not rejected — it is
+              accepted raw and cleansed automatically on load (balances recomputed from the ledger,
+              unfixable records quarantined). Every correction and quarantine is listed in the
+              cleansing report below; the raw file itself is never modified.
+            </p>
             {validation.errors.length > 0 && (
               <div>
-                <p><strong>{validation.errors.length} error(s) — these block the load:</strong></p>
+                <p><strong>{validation.errors.length} issue(s) — the cleanser will fix or quarantine them:</strong></p>
                 <ul>{validation.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
               </div>
             )}
             {validation.warnings.length > 0 && (
               <div>
-                <p><strong>{validation.warnings.length} warning(s) — shown, but they do not block the load:</strong></p>
+                <p><strong>{validation.warnings.length} warning(s) — shown, and kept in the cleansed file:</strong></p>
                 <ul>{validation.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
               </div>
             )}
@@ -192,10 +254,103 @@ export default function DataView({ state, onLoadDataset, onReset, audit }: {
             {validation.valid && validation.errors.length === 0 && validation.warnings.length === 0 && (
               <p>No errors, no warnings. Balances reconcile to the cent and every reference resolves.</p>
             )}
-            <button className="btn mt" disabled={!validation.valid || !tables} onClick={load}>
-              Load this dataset
-            </button>
-            {!validation.valid && <p className="small muted">Nothing was loaded — fix the errors above and upload again.</p>}
+            {validation.valid ? (
+              <button className="btn mt" disabled={!tables} onClick={load}>
+                Load this dataset
+              </button>
+            ) : rawTables ? (
+              <div>
+                <button className="btn mt" onClick={loadCleanse}>
+                  Load raw &amp; cleanse automatically
+                </button>
+                <p className="small muted">
+                  Loads the cleansed dataset — balances corrected from the ledger, bad records
+                  quarantined and listed. Dashboard, Cases, Medallion, Pipelines and Search all
+                  run on the cleansed data.
+                </p>
+              </div>
+            ) : (
+              <p className="small muted">
+                This file cannot be cleansed automatically — it is structurally unusable (a required
+                table is missing, or the file could not be parsed). Nothing was loaded. Fix the
+                structure and upload again.
+              </p>
+            )}
+          </div>
+        )}
+        {cleanseBlocked && (
+          <p role="alert" className="mt"><strong>Could not cleanse this file:</strong> {cleanseBlocked} Nothing was loaded.</p>
+        )}
+
+        {cleanseReport && cleanseReport.canCleanse && cleansedTables && (
+          <div className="panel mt">
+            <h2>Cleansing report — production-ready dataset</h2>
+            <p className="small">
+              Raw: {cleanseReport.sourceCounts.customers} customers · {cleanseReport.sourceCounts.ledger} ledger entries ·{' '}
+              {cleanseReport.sourceCounts.usage} usage records · {cleanseReport.sourceCounts.cases} cases
+              {' '}→ Cleansed: {cleanseReport.cleansedCounts.customers} customers · {cleanseReport.cleansedCounts.ledger} ledger entries ·{' '}
+              {cleanseReport.cleansedCounts.usage} usage records · {cleanseReport.cleansedCounts.cases} cases
+            </p>
+            <p className="small">
+              <strong>{cleanseReport.corrected.length} balance correction(s)</strong> — the ledger is the
+              source of truth, each balance was recomputed from the posted ledger entries.{' '}
+              <strong>{cleanseReport.quarantined.length} record(s) quarantined</strong> — removed from the
+              cleansed set, listed with reasons, never deleted from your raw file.{' '}
+              <strong>{cleanseReport.notes.length} note(s)</strong> — records kept as-is (duplicate charges,
+              suspended accounts with a balance, zero-amount entries).
+            </p>
+            {cleanseReport.corrected.length > 0 && (
+              <div>
+                <p><strong>Corrections:</strong></p>
+                <ul>
+                  {cleanseReport.corrected.map((c, i) => (
+                    <li key={i}>{c.table} {c.id} — {c.field}: {c.oldValue} → {c.newValue} ({c.rule})</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {cleanseReport.quarantined.length > 0 && (
+              <div>
+                <p><strong>Quarantined:</strong></p>
+                <ul>
+                  {cleanseReport.quarantined.map((q, i) => (
+                    <li key={i}>{q.table} {q.id} — {q.reason} ({q.rule})</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {cleanseReport.notes.length > 0 && (
+              <div>
+                <p className="small muted"><strong>Notes (kept in the cleansed file):</strong></p>
+                <ul>
+                  {cleanseReport.notes.map((n, i) => (
+                    <li key={i} className="small muted">{n}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="small">
+              The cleansed dataset passed validation with 0 errors and is now the working caseload.
+              Download it as the production-ready file — same shape as <code>test-data.json</code>,
+              ready to hand to the fulfilment team or use as a new seed.
+            </p>
+            <div className="row">
+              <button
+                className="btn small"
+                onClick={() => download('dataset-production-ready.json', datasetTablesToJson(cleansedTables), 'application/json')}
+              >
+                Download production-ready dataset (.json)
+              </button>
+              {(Object.keys(CSV_HEADERS) as (keyof typeof CSV_HEADERS)[]).map((t) => (
+                <button
+                  key={t}
+                  className="btn small secondary"
+                  onClick={() => download(`${t}.production-ready.csv`, datasetTableToCsv(t, cleansedTables), 'text/csv')}
+                >
+                  {t}.csv
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

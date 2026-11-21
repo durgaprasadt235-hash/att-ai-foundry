@@ -166,11 +166,15 @@ brings**: open the **Data** view, upload a `.json` file (same shape as
 `usage.csv`, `cases.csv`, `tickets.csv` optional), read the validation
 report, and test the agent on *your* records in minutes.
 
-- **Validated before it loads:** record counts, duplicate ids, unknown
-  customer references, and balances that don't reconcile to the cent are
-  all reported; an invalid file is rejected with the exact errors and
-  nothing is half-loaded. Warnings (duplicate charges found, a case
-  amount with no matching ledger entry) are shown, not hidden.
+- **Validated, then cleansed — a file uploads anyway:** record counts, duplicate ids, unknown
+  customer references, and balances that don't reconcile to the cent are all reported in the
+  validation report — which is a pre-check, not a gate. A raw file is accepted and cleansed
+  automatically on load (rules CL1–CL8, `src/lib/cleanse.ts` / `server/cleanse.py`): balances
+  recomputed from the ledger, unfixable records quarantined and listed, never guessed. The
+  cleansed dataset is what loads, and it can be downloaded as the production-ready file
+  (`dataset-production-ready.json`, plus per-table CSVs) — it passes validation with 0 errors.
+  Warnings (duplicate charges found, a case amount with no matching ledger entry) are shown,
+  not hidden, and kept in the cleansed file.
 - **Private by design:** files are read in the browser only — nothing is
   uploaded to any server, the dataset never leaves the device, and the
   built-in seed files are never touched. **Reset to original dataset**

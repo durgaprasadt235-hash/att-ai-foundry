@@ -13,7 +13,6 @@ import { redactPII } from './lib/redact';
 import { getCurrentOperatorId } from './lib/auth';
 import { SEARCH_RESULT_LIMIT, searchCustomers } from './lib/customer-search';
 import DataView from './components/DataView';
-import { datasetToState, type DatasetTables } from './lib/dataset';
 import CreateCaseForm from './components/CreateCaseForm';
 
 /** Shape of GET /api/health (mirrors api/health.ts + server/app.py). The
@@ -347,11 +346,12 @@ export default function App() {
   }
 
   // ---------- Bring your own dataset (see lib/dataset.ts) ----------
-  // Loading a validated dataset replaces the working caseload in browser
-  // state; the built-in seed files on disk are never touched. Reset
-  // restores the built-in seed.
-  const loadDataset = (tables: DatasetTables, name: string) => {
-    const next = datasetToState(tables, name);
+  // Loading a dataset replaces the working caseload in browser state;
+  // the built-in seed files on disk are never touched. Reset restores
+  // the built-in seed. DataView builds the next state (via
+  // datasetToState, which writes the load / cleanse audit entry) and
+  // passes it here ready-made — this only swaps it in.
+  const loadDataset = (next: AppState, name: string) => {
     stateRef.current = next;
     setState(next);
     setNotice(`Loaded dataset "${name}": ${next.customers.length} customers, ${next.cases.length} cases. Dashboard, Cases, Medallion and Pipelines now run on your data.`);
