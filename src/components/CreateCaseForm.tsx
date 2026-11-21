@@ -10,13 +10,17 @@ import type { Case, Customer } from '../lib/types';
 import { JOURNEYS, PLAN_OPTIONS, buildCase, type JourneyId } from '../lib/case-intake';
 import { uid } from '../lib/store';
 
-export default function CreateCaseForm({ customers, cases, onCreateAndRun }: {
+export default function CreateCaseForm({ customers, cases, onCreateAndRun, preselectedCustomerId }: {
   customers: Customer[];
   cases: Case[];
   onCreateAndRun: (c: Case, newCustomer?: Customer) => void;
+  /** When the form is opened from a Customer 360 panel, the customer is
+   *  already known — pre-select them. Render with key={customerId} so a
+   *  different customer remounts the form with the new pre-selection. */
+  preselectedCustomerId?: string;
 }) {
   const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing');
-  const [customerId, setCustomerId] = useState(customers[0]?.id ?? '');
+  const [customerId, setCustomerId] = useState(preselectedCustomerId ?? customers[0]?.id ?? '');
   const [newName, setNewName] = useState('');
   const [newPlan, setNewPlan] = useState(PLAN_OPTIONS[0]);
   const [journey, setJourney] = useState<JourneyId>('billing_dispute');

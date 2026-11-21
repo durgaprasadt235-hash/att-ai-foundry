@@ -10,6 +10,7 @@ import { stateTraceForRun } from './lib/agent';
 import { newAppEvent } from './lib/events';
 import type { AppEvent } from './lib/events';
 import { redactPII } from './lib/redact';
+import { SEARCH_RESULT_LIMIT, searchCustomers } from './lib/customer-search';
 import DataView from './components/DataView';
 import { datasetToState, type DatasetTables } from './lib/dataset';
 import CreateCaseForm from './components/CreateCaseForm';
@@ -370,9 +371,9 @@ export default function App() {
       </nav>
       <div className="wrap">
         {notice && <div className="panel mt" role="status">{notice}</div>}
-        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShowCases={() => setView('cases')} />}
+        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShowCases={() => setView('cases')} onShowCustomers={() => setView('customers')} />}
         {view === 'data' && <DataView state={state} onLoadDataset={loadDataset} onReset={resetDataset} audit={audit} />}
-        {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} />}
+        {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} onRun={runAgent} onCreateAndRun={createCaseAndRun} />}
         {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} onCreateAndRun={createCaseAndRun} />}
         {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} emit={emit} />}
         {view === 'medallion' && <MedallionView state={state} audit={audit} />}
@@ -389,11 +390,16 @@ export default function App() {
 }
 
 /* ---------------- Dashboard ---------------- */
-function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, onShowCases }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; onShowCases: () => void }) {
+function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, onShowCases, onShowCustomers }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; onShowCases: () => void; onShowCustomers: () => void }) {
   return (
     <section>
       <h1>Five journeys, one agent — end to end</h1>
       <p className="muted">Billing dispute, service provisioning, network outage triage, plan upgrade, and retention — the same agent retrieves Customer 360, grounds itself in policy with STAIR, validates, and proposes. Then it stops for human approval. Nothing is credited, activated, or changed until a person approves it.</p>
+      <div className="panel">
+        <h2>Find a customer — where every call starts</h2>
+        <p className="small muted">The agent's first step is Customer 360, and before that someone has to find the account — by name, phone, account number or email. Search the caseload, open the customer's 360 view, and create a case from there.</p>
+        <button className="btn accent" onClick={onShowCustomers}>Find a customer</button>
+      </div>
       <CreateCaseForm customers={state.customers} cases={state.cases} onCreateAndRun={onCreateAndRun} />
       <div className="row">
         <button className="btn secondary" onClick={onShowCases}>See all 5 journeys</button>
@@ -548,31 +554,54 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
 }
 
 /* ---------------- Customers ---------------- */
-function CustomersView({ state, mutate, audit, emit }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void }) {
+function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void; onRun: (id: string) => Promise<void>; onCreateAndRun: (c: Case, newCustomer?: Customer) => void }) {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Customer | null>(null);
+  const [showIntake, setShowIntake] = useState(false);
   const [name, setName] = useState('');
   const [plan, setPlan] = useState('Unlimited Starter');
-  const filtered = state.customers.filter((c) => `${c.name} ${c.account} ${c.phone} ${c.id}`.toLowerCase().includes(q.toLowerCase()));
+  // One search box, matched across name / phone / account / email /
+  // customer ID (see lib/customer-search.ts). It searches whatever is
+  // in state — the built-in seed or an uploaded dataset.
+  const search = searchCustomers(state.customers, q);
   const view360 = sel ? customer360(state, sel.id) : null;
+  // Simulate an incoming call: what dialling 611 does — the calling
+  // line identifies the account before the agent speaks. Picks a
+  // customer and pre-fills the search with their phone number.
+  // Clearly labelled as a simulation; no real call takes place.
+  const simulateIncomingCall = () => {
+    const active = state.customers.filter((c) => c.status === 'active');
+    const pool = active.length > 0 ? active : state.customers;
+    if (pool.length === 0) return;
+    const caller = pool[Math.floor(Math.random() * pool.length)];
+    setQ(caller.phone);
+    setSel(caller);
+    setShowIntake(false);
+    audit('system', 'simulated_call', `Simulated incoming call (611): calling line ${caller.phone} identified ${caller.name} (${caller.id}) before the agent spoke.`);
+  };
   return (
     <section>
-      <h1>Customers</h1>
-      <p className="muted">Synthetic demo data — invented names, accounts and phone numbers. No real PII.</p>
-      <input className="search" type="text" placeholder="Search name, account, phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <h1>Find a customer</h1>
+      <p className="muted">Where every call starts: find the account, open Customer 360 — the same 360 the agent builds in its RETRIEVE_360 step — then create a case from there. Search by name, phone number, account number, email or customer ID. Synthetic demo data — invented names, accounts and phone numbers. No real PII.</p>
+      <div className="row">
+        <input className="search" type="text" placeholder="Search name, phone, account, email or customer ID…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
+        <button className="btn secondary" onClick={simulateIncomingCall} title="Simulation: picks a customer and pre-fills the search with their phone number, the way dialling 611 identifies the calling line.">Simulate incoming call (611)</button>
+      </div>
+      <p className="small muted mt">Showing {search.results.length} of {search.total} match{search.total === 1 ? '' : 'es'}{search.capped ? ` — capped at ${SEARCH_RESULT_LIMIT} rows; narrow the search to see more` : ''}.</p>
       <div className="table-wrap mt"><table>
-        <thead><tr><th>Customer</th><th>Account</th><th>Plan</th><th>Balance</th><th>Status</th><th></th></tr></thead>
-        <tbody>{filtered.map((c) => (
+        <thead><tr><th>Customer</th><th>Account</th><th>Plan</th><th>Balance</th><th>Status</th><th>Matched by</th><th></th></tr></thead>
+        <tbody>{search.results.map(({ customer: c, reasons }) => (
           <tr key={c.id}>
             <td><strong>{c.name}</strong><br /><span className="small muted">{c.city} · since {c.since}</span></td>
             <td>{c.account}<br /><span className="small muted">{c.phone}</span></td>
             <td>{c.plan}</td><td>{money(c.balance)}</td>
             <td>{statusPill(c.status)}</td>
-            <td><button className="btn small secondary" onClick={() => setSel(c)}>View 360</button></td>
+            <td><span className="small muted">{reasons.join(', ')}</span></td>
+            <td><button className="btn small secondary" onClick={() => { setSel(c); setShowIntake(false); }}>View 360</button></td>
           </tr>
         ))}</tbody>
       </table></div>
-      {filtered.length === 0 && <p className="muted mt">No customers match that search.</p>}
+      {search.results.length === 0 && <p className="muted mt">No customers match that search.</p>}
       <div className="panel">
         <h2>Add a customer</h2>
         <div className="grid2">
@@ -589,20 +618,44 @@ function CustomersView({ state, mutate, audit, emit }: { state: AppState; mutate
       </div>
       {view360 && view360.customer && (
         <div className="panel highlight">
-          <div className="row space"><h2>Customer 360 — {view360.customer.name}</h2><button className="btn small secondary" onClick={() => setSel(null)}>Close</button></div>
-          <p className="small muted">{view360.customer.account} · {view360.customer.phone} · {view360.customer.plan} · Balance {money(view360.customer.balance)}</p>
+          <div className="row space"><h2>Customer 360 — {view360.customer.name}</h2><button className="btn small secondary" onClick={() => { setSel(null); setShowIntake(false); }}>Close</button></div>
+          <p className="small muted">{view360.customer.id} · {view360.customer.account} · {view360.customer.phone}{view360.customer.email ? ` · ${view360.customer.email}` : ''}</p>
+          <p className="small">Plan: <strong>{view360.customer.plan}</strong> · Balance: <strong>{money(view360.customer.balance)}</strong> · Status: <strong>{view360.customer.status}</strong> · Customer since {view360.customer.since} · {view360.customer.city}</p>
+          <p className="small muted">This is the same Customer 360 the agent builds in its RETRIEVE_360 step before it grounds itself in policy — one record, assembled from CRM, billing and usage.</p>
           <div className="grid3">
             <div><h3>Billing ledger</h3>{view360.ledger.length === 0 ? <p className="muted small">No entries.</p> : view360.ledger.map((e) => <p key={e.id} className="small">{e.date} · {e.invoice} · {e.service} · <strong>{money(e.amount)}</strong> · {e.status}</p>)}</div>
-            <div><h3>Usage</h3>{view360.usage.map((u) => <p key={u.id} className="small">{u.month}: {u.dataGb} GB, {u.minutes} min, {u.sms} SMS</p>)}</div>
-            <div><h3>Cases &amp; tickets</h3>{view360.cases.map((c) => <p key={c.id} className="small">{c.id}: {c.title} — {c.status}</p>)}{view360.tickets.map((t) => <p key={t.id} className="small">{t.id}: {t.subject} — {t.status}</p>)}</div>
+            <div><h3>Usage</h3>{view360.usage.length === 0 ? <p className="muted small">No usage records.</p> : view360.usage.map((u) => <p key={u.id} className="small">{u.month}: {u.dataGb} GB, {u.minutes} min, {u.sms} SMS</p>)}</div>
+            <div><h3>Cases &amp; tickets</h3>{view360.cases.length === 0 && view360.tickets.length === 0 ? <p className="muted small">No cases or tickets.</p> : <>{view360.cases.map((c) => (
+              <p key={c.id} className="small">{c.id}: {c.title} — {c.status}
+                {(c.status === 'open' || c.status === 'failed') && (
+                  <> <button className="btn small accent" onClick={() => { void onRun(c.id); }}>Run agent</button></>
+                )}
+              </p>
+            ))}{view360.tickets.map((t) => <p key={t.id} className="small">{t.id}: {t.subject} — {t.status}</p>)}</>}</div>
           </div>
-          <div className="mt"><ConfirmButton label="Delete customer" confirmLabel="Confirm delete" kind="danger" onConfirm={() => {
-            mutate((s) => ({ ...s, customers: s.customers.filter((c) => c.id !== view360.customer!.id) }));
-            audit('human', 'customer_deleted', `Deleted customer ${view360.customer!.id}.`);
-            setSel(null);
-          }} /></div>
+          <div className="row mt">
+            <button className="btn accent" onClick={() => setShowIntake((v) => !v)}>{showIntake ? 'Hide case form' : `Create case for ${view360.customer.name}`}</button>
+            <ConfirmButton label="Delete customer" confirmLabel="Confirm delete" kind="danger" onConfirm={() => {
+              mutate((s) => ({ ...s, customers: s.customers.filter((c) => c.id !== view360.customer!.id) }));
+              audit('human', 'customer_deleted', `Deleted customer ${view360.customer!.id}.`);
+              setSel(null);
+              setShowIntake(false);
+            }} />
+          </div>
+          {showIntake && <div className="mt"><CreateCaseForm key={view360.customer.id} customers={state.customers} cases={state.cases} preselectedCustomerId={view360.customer.id} onCreateAndRun={onCreateAndRun} /></div>}
         </div>
       )}
+      <div className="panel mt">
+        <h2>How AT&amp;T finds a customer today</h2>
+        <p className="small">When a customer calls or needs help, AT&amp;T identifies the account before the conversation starts — and this prototype's lookup mirrors that flow:</p>
+        <ul className="small">
+          <li><strong>By phone — 611</strong> from an AT&amp;T wireless phone identifies the calling line automatically. Other lines: wireless <strong>1-800-331-0500</strong>, internet / home phone <strong>1-800-288-2020</strong>, prepaid <strong>1-800-901-9878</strong>, business <strong>1-800-321-2000</strong>.</li>
+          <li><strong>Digital:</strong> the myAT&amp;T app (chat 24/7), live chat at att.com/support, the att.com account, social care at @ATTCares, or in person at an AT&amp;T store.</li>
+          <li><strong>Identifiers:</strong> the calling phone number first; otherwise the account number (top-right of the bill, or bill overview in myAT&amp;T / att.com). An agent can also find the account from just a phone number + name.</li>
+          <li><strong>Verification:</strong> name + address + phone number, then a 4-digit PIN/passcode or the last 4 of the SSN before account details are discussed.</li>
+        </ul>
+        <p className="small muted">In this prototype the lookup above runs against the loaded dataset (the built-in seed or a file uploaded in the Data tab). In production it runs against the CRM through the <code>att</code> datasource adapter — same search box, real systems behind it.</p>
+      </div>
     </section>
   );
 }

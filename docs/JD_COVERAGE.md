@@ -21,7 +21,7 @@ panel (which computes its rows from `/api/health` and live state).
 
 | JD line | Implemented in | How to verify | Status |
 |---|---|---|---|
-| 5 journeys: plan → Customer 360 → STAIR grounding → validate → propose → human approval → execute → verify | `src/lib/engine.ts:planRun`, `server/engine.py:plan_run`, `src/App.tsx:runAgent/approveRun/finishRun` | Create a case on the Dashboard and read the run trace; `pytest server/test_engine.py` | done |
+| 5 journeys: find customer → plan → Customer 360 → STAIR grounding → validate → propose → human approval → execute → verify | `src/lib/customer-search.ts:searchCustomers` (lookup), `src/lib/engine.ts:planRun`, `server/engine.py:plan_run`, `src/App.tsx:runAgent/approveRun/finishRun` | Search "maya" in the Customers view and open Customer 360; create a case on the Dashboard and read the run trace; `pytest server/test_engine.py`; `tmp/smoke-search.ts` | done |
 | Agent state machine EXPLICIT, named states + transitions | `src/lib/agent.ts`, `server/agent.py` (`INTAKE → RETRIEVE_360 → GROUND → VALIDATE → PROPOSE → AWAITING_APPROVAL → EXECUTE → VERIFY → DONE`, `FAILED`/`REJECTED` terminal) | `pytest server/test_agent.py` (legal traces, illegal jumps reported); run a case and read the "State machine:" line in the run view; `agentStateTrace` in the plan response | done |
 | State trace shown in the UI run view | `src/App.tsx` CasesView ("State machine: … valid/invalid" + trace id) | Cases tab → run a case → run trace panel | done |
 

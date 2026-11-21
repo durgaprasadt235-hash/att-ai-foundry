@@ -77,8 +77,8 @@ be: *this is nailed — onboard it, connect the real systems, ship it.*
 
 ## 5. The agent — one LangGraph-style workflow
 
-Every journey runs the same eight-step workflow. There is one agent, not
-five different ones.
+Every journey runs the same workflow: find the customer first, then the
+same eight agent steps. There is one agent, not five different ones.
 
 ```
 plan → Customer 360 → STAIR grounding → validate → propose
@@ -87,8 +87,9 @@ plan → Customer 360 → STAIR grounding → validate → propose
 
 | Step | What happens | Failure behaviour |
 |---|---|---|
+| **Find customer (step 0)** | Before the workflow starts, the operator finds the account in the Customers view — one search box across name, phone (digits only), account number, email and customer ID, with the match reason shown per result — and opens Customer 360. This mirrors how AT&T finds a customer today: the calling phone number first (611 identifies the line), otherwise the account number, then name + address + phone, verified with a 4-digit PIN or last 4 of SSN. "Simulate incoming call (611)" demonstrates the phone-first path. The lookup searches whatever dataset is loaded (seed or uploaded file); in production it runs against the CRM through the `att` adapter. | No match → empty result list, nothing invented; a 1,000-customer list caps at 50 rows with the total shown |
 | Plan | Agent reads the case and selects the workflow (billing / provisioning / outage / plan / retention) | Unknown case type fails honestly: "no agent workflow for this type" |
-| Customer 360 | Loads the customer, ledger, and usage from the data source | Unknown customer / missing record fails honestly |
+| Customer 360 | Loads the customer, ledger, and usage from the data source — the same 360 the lookup opened | Unknown customer / missing record fails honestly |
 | STAIR grounding | Retrieves the exact policy leaf from the structured policy tree, cited by full path (e.g. `Billing Policy > Credits > Duplicate Charges §4.2`) | No matching policy → "Not found in policy", no answer invented |
 | Validate | Checks the business rules for the journey (duplicate detection, balance limits, churn-signal count, outage confirmation) | Rule failure → case fails with the exact reason, no action proposed |
 | Propose | Produces the concrete action (credit amount, provisioning step, technician dispatch, price change, save offer) with the citation | — |

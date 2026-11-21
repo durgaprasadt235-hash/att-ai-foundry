@@ -84,12 +84,48 @@ hours, and the trace names both the case amount and the policy credit
 (CASE-1007: the $18.45 case amount is the reported device installment; the
 credit is $25.00).
 
-**Run it in under 2 minutes:** open the app → Dashboard → **Create a case**
-(pick a customer, a journey, an amount, and what happened) → **Create case &
-run agent** → approve the proposed credit → watch the balance change, the
-notification appear, and the ROI numbers move. Every case is a real record
-you just created — there is no canned demo case. The 12 seeded cases in the
+**Run it in under 2 minutes:** open the app → Dashboard → **Find a customer**
+(search by name, phone, account number, email or customer ID — or press
+**Simulate incoming call (611)** to see the calling line identify the account)
+→ open Customer 360 → **Create a case** → **Create case & run agent** →
+approve the proposed credit → watch the balance change, the notification
+appear, and the ROI numbers move. Every case is a real record you just
+created — there is no canned demo case. The 12 seeded cases in the
 Cases view are the existing caseload, each runnable from its own row.
+
+## Find a customer — where every call starts
+
+The agent's first step is Customer 360, and before that someone has to
+find the account. The Customers view is that lookup:
+
+- **One search box**, matched across name (partial, case-insensitive),
+  phone number (digits only — `2015550142`, `(201) 555-0142` and
+  `555-0142` all match the same line), account number (`ACC-…`),
+  email, and customer ID (`CUST-…`). Every result shows *why* it
+  matched ("matched phone", "matched account"). Empty query lists the
+  caseload, capped at 50 rows with the total shown.
+- **Customer 360** for the selected person — plan, balance, status,
+  since, city, ledger, usage, open cases — the same 360 the agent
+  builds in its `RETRIEVE_360` step. From there: **Create case for this
+  customer** (intake form pre-filled) or **Run agent** on an open case.
+- **Simulate incoming call (611)** — picks a customer and pre-fills the
+  search with their phone number, the way dialling 611 identifies the
+  calling line before the agent speaks. Clearly labelled as a simulation.
+- **How AT&T finds a customer today** — the panel in the Customers view
+  lists the real channels (611, 1-800-331-0500 wireless,
+  1-800-288-2020 internet/home phone, 1-800-901-9878 prepaid,
+  1-800-321-2000 business, myAT&T app, live chat, stores) and the
+  identifiers (calling phone number first, then account number, then
+  name + address + phone, verified with a 4-digit PIN or last 4 of SSN).
+  In this prototype the lookup runs against the loaded dataset (seed or
+  uploaded file); in production it runs against the CRM through the
+  `att` datasource adapter.
+
+The search runs on whatever is in state — an uploaded dataset is
+searchable the same way as the seed. Verified by the smoke check in
+`tmp/smoke-search.ts` (esbuild-bundled, run with node): "maya",
+"2015550142", "ACC-884120" and "CUST-1001" each find Maya Rodriguez,
+"zzz-no-match" finds nobody, and a 1,000-customer list caps at 50 rows.
 
 ## Bring your own dataset — the first call
 
@@ -522,6 +558,8 @@ src/lib/api-utils.ts   API helpers — JSON errors + demo-grade rate-limit guard
 src/lib/dataset.ts     bring-your-own-dataset: JSON + CSV validation (rules D1–D12), CSV parser, templates, datasetToState
 src/components/DataView.tsx  Data view: upload, validation report, templates, reset to original dataset
 src/lib/case-intake.ts   case intake — create a real case (no canned demo case)
+src/lib/customer-search.ts  Find a customer — name / phone (digits only) / account / email / customer ID, match reasons, 50-row cap
+src/components/CreateCaseForm.tsx  case-intake form (Dashboard, Cases, Customer 360 pre-filled)
 src/App.tsx            Dashboard (Production readiness panel), Data, Customers, Cases, Pipelines, Medallion, RAG, STAIR, Evals (release gate), Observability (audit + event feed)
 api/                   Vercel serverless: health, run-case, rag, stair
 docs/OPERATOR_RUNBOOK.md  1-person operations: daily loop, common failures + Copilot prompts, never-do list
