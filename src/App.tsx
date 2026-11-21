@@ -35,14 +35,14 @@ interface HealthStatus {
   demoData: string;
 }
 
-type View = 'dashboard' | 'data' | 'customers' | 'cases' | 'system' | 'overview';
+type View = 'dashboard' | 'data' | 'customers' | 'cases' | 'system' | 'about';
 const NAV: { id: View; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'data', label: 'Data' },
   { id: 'customers', label: 'Customers' },
   { id: 'cases', label: 'Cases' },
   { id: 'system', label: 'System' },
-  { id: 'overview', label: 'Overview' },
+  { id: 'about', label: 'About Me' },
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -414,7 +414,7 @@ export default function App() {
         {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} onRun={runAgent} onCreateAndRun={createCaseAndRun} confirmed={confirmed} onConfirmCustomer={confirmCustomer} onClearConfirmation={clearConfirmation} />}
         {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} onCreateAndRun={createCaseAndRun} />}
         {view === 'system' && <SystemView state={state} mutate={mutate} audit={audit} emit={emit} onReset={() => { const fresh = resetState(); setState(fresh); stateRef.current = fresh; setNotice('Demo data reset to the seeded state.'); }} />}
-        {view === 'overview' && <OverviewView />}
+        {view === 'about' && <OverviewView />}
         <footer>
           Demo: no real AT&amp;T API; all data is synthetic. Groq runs only when GROQ_API_KEY is set, otherwise the agent is deterministic. Baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case; agent cost {money(AGENT_COST_USD)} per run is a demo assumption, not a measured bill.
         </footer>

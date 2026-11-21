@@ -1,5 +1,18 @@
 # AT&T AI Foundry — High-Level Overview
 
+## About Me
+
+**Durga Prasad Thoorpati**
+Email: durgaprasadt235@gmail.com · Phone: +1 (201) 268-4657
+
+A senior software engineer with hands-on experience building enterprise
+data platforms and AI-integrated systems across telecom, banking,
+mortgage banking, and logistics and supply chains — production Python
+and APIs, data engineering and reconciliation at scale, retrieval and
+agentic workflows, and the operational discipline (evaluation,
+observability, audit) that turns a pilot into a system a business can
+run.
+
 ## What this is
 
 A working prototype of an AI agent that does real enterprise work across the
@@ -91,7 +104,7 @@ it does not warn.
 ## Architecture, in brief
 
 - **Operator app** — a web application: Dashboard, Data, Customers,
-  Cases, System, and this Overview. The System area holds pipelines,
+  Cases, System, and About Me. The System area holds pipelines,
   data layers, knowledge, evaluations, and observability.
 - **Agent engine** — the same rules in two forms: a deterministic
   engine in the app, and a Python reference backend (FastAPI-style,
@@ -125,18 +138,3 @@ it does not warn.
 2. Check the validation and cleansing report.
 3. Find a customer, verify them, create a case, and run the agent.
 4. Approve or reject the proposal, and read the measured outcome.
-
----
-
-## About
-
-**Durga Prasad Thoorpati**
-Email: durgaprasadt235@gmail.com · Phone: +1 (201) 268-4657
-
-A senior software engineer with hands-on experience building enterprise
-data platforms and AI-integrated systems across telecom, banking,
-mortgage banking, and logistics and supply chains — production Python
-and APIs, data engineering and reconciliation at scale, retrieval and
-agentic workflows, and the operational discipline (evaluation,
-observability, audit) that turns a pilot into a system a business can
-run.

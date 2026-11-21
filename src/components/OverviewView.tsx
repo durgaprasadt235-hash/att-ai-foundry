@@ -8,8 +8,16 @@
 export default function OverviewView() {
   return (
     <section>
-      <h1>AT&amp;T AI Foundry — Overview</h1>
-      <p className="small muted">What this is, how a call works, and what is honestly still a demo.</p>
+      <h1>About Me</h1>
+      <p className="small muted">Who built this, and what it is.</p>
+
+      <div className="panel">
+        <h2>About Me</h2>
+        <p><strong>Durga Prasad Thoorpati</strong></p>
+        <div className="ov-kv"><span className="k">Email</span><span>durgaprasadt235@gmail.com</span></div>
+        <div className="ov-kv"><span className="k">Phone</span><span>+1 (201) 268-4657</span></div>
+        <p className="mt">A senior software engineer with hands-on experience building enterprise data platforms and AI-integrated systems across telecom, banking, mortgage banking, and logistics and supply chains — production Python and APIs, data engineering and reconciliation at scale, retrieval and agentic workflows, and the operational discipline (evaluation, observability, audit) that turns a pilot into a system a business can run.</p>
+      </div>
 
       <div className="panel">
         <h2>What this is</h2>
@@ -63,7 +71,7 @@ export default function OverviewView() {
       <div className="panel">
         <h2>Architecture, in brief</h2>
         <ul className="ov-bullets">
-          <li><strong>Operator app</strong> — a web application: Dashboard, Data, Customers, Cases, System, and this Overview. The System area holds pipelines, data layers, knowledge, evaluations, and observability.</li>
+          <li><strong>Operator app</strong> — a web application: Dashboard, Data, Customers, Cases, System, and About Me. The System area holds pipelines, data layers, knowledge, evaluations, and observability.</li>
           <li><strong>Agent engine</strong> — the same rules in two forms: a deterministic engine in the app, and a Python reference backend (FastAPI-style, LangGraph-style state machine) in <code>server/</code>.</li>
           <li><strong>Live language model, optional</strong> — Groq is wired in, and when it is available it picks the policy section and drafts the summary. When it is not, the deterministic engine runs instead and says so. The human approval step gates everything either way.</li>
           <li><strong>Data source switch</strong> — the app runs on a built-in dataset or an uploaded file today; pointing it at real AT&amp;T systems is a configuration change plus the fulfilment team&apos;s access, not a rebuild.</li>
@@ -89,14 +97,6 @@ export default function OverviewView() {
           <li><span className="ov-num">3</span><span>Find a customer, verify them, create a case, and run the agent.</span></li>
           <li><span className="ov-num">4</span><span>Approve or reject the proposal, and read the measured outcome.</span></li>
         </ol>
-      </div>
-
-      <div className="panel">
-        <h2>About</h2>
-        <p><strong>Durga Prasad Thoorpati</strong></p>
-        <div className="ov-kv"><span className="k">Email</span><span>durgaprasadt235@gmail.com</span></div>
-        <div className="ov-kv"><span className="k">Phone</span><span>+1 (201) 268-4657</span></div>
-        <p className="mt">A senior software engineer with hands-on experience building enterprise data platforms and AI-integrated systems across telecom, banking, mortgage banking, and logistics and supply chains — production Python and APIs, data engineering and reconciliation at scale, retrieval and agentic workflows, and the operational discipline (evaluation, observability, audit) that turns a pilot into a system a business can run.</p>
       </div>
     </section>
   );
