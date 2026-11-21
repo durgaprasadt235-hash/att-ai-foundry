@@ -116,7 +116,7 @@ find the account. The Customers view is that lookup:
   1-800-288-2020 internet/home phone, 1-800-901-9878 prepaid,
   1-800-321-2000 business, myAT&T app, live chat, stores) and the
   identifiers (calling phone number first, then account number, then
-  name + address + phone, verified with a 4-digit PIN or last 4 of SSN).
+  name + phone, verified with the 6-digit account PIN the customer created — or, if they don't have it, a one-time code sent to the registered phone/email after the customer confirms the registered email matches).
   In this prototype the lookup runs against the loaded dataset (seed or
   uploaded file); in production it runs against the CRM through the
   `att` datasource adapter.

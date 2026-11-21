@@ -6,7 +6,7 @@
 // from the calling phone number first (dialling 611 from an AT&T phone
 // identifies the line before the agent speaks), otherwise from the
 // account number (top-right of the bill), or from name + address +
-// phone, verified with a 4-digit PIN/passcode or the last 4 of the SSN.
+// phone, verified with the 6-digit account PIN the customer created; without it, a one-time code is sent to the registered phone/email only after the customer confirms the registered email matches.
 //
 // The matcher below mirrors that: one box, matched across name (partial,
 // case-insensitive), phone (digits only — "2015550142", "(201) 555-0142"
