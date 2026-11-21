@@ -493,24 +493,31 @@ def validate_pipeline(pipeline_id: str, state: dict) -> dict:
     if pipeline_id == "PIPE-01":
         # Customer 360 ingest — customers only.
         exceptions: list[str] = []
+        quarantined: list[dict] = []
         failed = 0
         for c in state["customers"]:
             if c["status"] == "suspended" and c["balance"] > 0:
                 exceptions.append(
                     f"Suspended account with balance: {c['id']} {c['name']} (${c['balance']:.2f})"
                 )
+                quarantined.append({"recordId": c["id"], "recordKind": "customer",
+                                    "reason": f"Suspended account with balance ${c['balance']:.2f}"})
                 failed += 1
-        return {"processed": len(state["customers"]), "failed": failed, "exceptions": exceptions}
+        return {"processed": len(state["customers"]), "failed": failed, "exceptions": exceptions, "quarantined": quarantined}
     if pipeline_id == "PIPE-02":
         # Billing ledger reconcile — ledger only.
         exceptions = []
+        quarantined = []
         failed = 0
         for e in state["ledger"]:
             if not any(c["id"] == e["customerId"] for c in state["customers"]):
                 exceptions.append(f"Ledger {e['id']} references unknown customer {e['customerId']}")
+                quarantined.append({"recordId": e["id"], "recordKind": "ledger",
+                                    "reason": f"References unknown customer {e['customerId']}"})
                 failed += 1
             if e["amount"] == 0:
                 exceptions.append(f"Ledger {e['id']} has a zero amount")
+                quarantined.append({"recordId": e["id"], "recordKind": "ledger", "reason": "Zero amount"})
                 failed += 1
         for customer_id in sorted({e["customerId"] for e in state["ledger"]}):
             dup = find_duplicate(state["ledger"], customer_id)
@@ -519,16 +526,22 @@ def validate_pipeline(pipeline_id: str, state: dict) -> dict:
                     f"Duplicate charge: {customer_id} {dup['original']['invoice']} + "
                     f"{dup['duplicate']['invoice']} (${dup['duplicate']['amount']:.2f})"
                 )
+                quarantined.append({"recordId": dup["duplicate"]["id"], "recordKind": "ledger",
+                                    "reason": f"Duplicate charge: {dup['original']['invoice']} + "
+                                              f"{dup['duplicate']['invoice']} (${dup['duplicate']['amount']:.2f})"})
                 failed += 1
-        return {"processed": len(state["ledger"]), "failed": failed, "exceptions": exceptions}
+        return {"processed": len(state["ledger"]), "failed": failed, "exceptions": exceptions, "quarantined": quarantined}
     if pipeline_id == "PIPE-03":
         # Usage daily rollup — usage only.
         exceptions = []
+        quarantined = []
         failed = 0
         for u in state["usage"]:
             customer = next((c for c in state["customers"] if c["id"] == u["customerId"]), None)
             if customer is None:
                 exceptions.append(f"Usage {u['id']} references unknown customer {u['customerId']}")
+                quarantined.append({"recordId": u["id"], "recordKind": "usage",
+                                    "reason": f"References unknown customer {u['customerId']}"})
                 failed += 1
                 continue
             if (u.get("dataGb") or 0) < 0 or (u.get("minutes") or 0) < 0 or (u.get("sms") or 0) < 0:
@@ -536,10 +549,14 @@ def validate_pipeline(pipeline_id: str, state: dict) -> dict:
                     f"Usage {u['id']} has a negative value (data {u.get('dataGb')} GB, "
                     f"{u.get('minutes')} min, {u.get('sms')} sms)"
                 )
+                quarantined.append({"recordId": u["id"], "recordKind": "usage",
+                                    "reason": f"Negative value (data {u.get('dataGb')} GB, "
+                                              f"{u.get('minutes')} min, {u.get('sms')} sms)"})
                 failed += 1
                 continue
             if not u.get("month"):
                 exceptions.append(f"Usage {u['id']} is missing a month")
+                quarantined.append({"recordId": u["id"], "recordKind": "usage", "reason": "Missing month"})
                 failed += 1
                 continue
             if (customer["status"] == "active" and (u.get("dataGb") or 0) == 0
@@ -547,9 +564,11 @@ def validate_pipeline(pipeline_id: str, state: dict) -> dict:
                 exceptions.append(
                     f"Usage {u['id']}: active account {u['customerId']} recorded zero usage for {u.get('month')}"
                 )
+                quarantined.append({"recordId": u["id"], "recordKind": "usage",
+                                    "reason": f"Active account recorded zero usage for {u.get('month')}"})
                 failed += 1
-        return {"processed": len(state["usage"]), "failed": failed, "exceptions": exceptions}
-    return {"processed": 0, "failed": 1, "exceptions": [f"Unknown pipeline {pipeline_id}"]}
+        return {"processed": len(state["usage"]), "failed": failed, "exceptions": exceptions, "quarantined": quarantined}
+    return {"processed": 0, "failed": 1, "exceptions": [f"Unknown pipeline {pipeline_id}"], "quarantined": []}
 
 
 def run_eval_suite(state: dict) -> list[dict]:

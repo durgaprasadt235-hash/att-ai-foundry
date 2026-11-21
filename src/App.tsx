@@ -2,15 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentRun, AppState, Case, Customer, PolicyDoc } from './lib/types';
 import { AGENT_COST_USD, EVAL_GATE_PCT, MANUAL_COST_USD, MANUAL_MINUTES, OUTAGE_CREDIT_USD, RETENTION_CREDIT_USD } from './lib/types';
 import { applyCredit, creditAlreadyApplied, customer360, dashboard, evalScore, findDuplicate, groundedAnswer, planRun, runEvalSuite, validatePipeline } from './lib/engine';
+import { buildMedallion, defaultBatchId, lineageForRecord, runMedallionBatch } from './lib/medallion';
+import type { MedallionBatchRun } from './lib/types';
 import { fmtMin, fmtMs, loadState, money, resetState, saveState, uid } from './lib/store';
 import { autoTocFromDoc, measureChunkRagEval, measureStairEval, stairAnswer, stairRetrieve } from './lib/stair';
 
-type View = 'dashboard' | 'customers' | 'cases' | 'pipelines' | 'rag' | 'stair' | 'evals' | 'observability';
+type View = 'dashboard' | 'customers' | 'cases' | 'pipelines' | 'medallion' | 'rag' | 'stair' | 'evals' | 'observability';
 const NAV: { id: View; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'customers', label: 'Customers' },
   { id: 'cases', label: 'Cases' },
   { id: 'pipelines', label: 'Pipelines' },
+  { id: 'medallion', label: 'Medallion' },
   { id: 'rag', label: 'RAG Knowledge' },
   { id: 'stair', label: 'STAIR' },
   { id: 'evals', label: 'Evaluations' },
@@ -257,6 +260,7 @@ export default function App() {
         {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} />}
         {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} mutate={mutate} audit={audit} />}
         {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} />}
+        {view === 'medallion' && <MedallionView state={state} audit={audit} />}
         {view === 'rag' && <RagView state={state} mutate={mutate} audit={audit} />}
         {view === 'stair' && <StairView state={state} />}
         {view === 'evals' && <EvalsView state={state} mutate={mutate} audit={audit} />}
@@ -486,7 +490,7 @@ function PipelinesView({ state, mutate, audit }: { state: AppState; mutate: (fn:
   return (
     <section>
       <h1>Pipelines</h1>
-      <p className="muted">ETL runs validate the seeded batch and count what actually passed or failed. Exceptions are listed, not hidden.</p>
+      <p className="muted">ETL runs validate the seeded batch and count what actually passed or failed. Exceptions are listed, not hidden. These are the <strong>Medallion Silver quality gates</strong> — see the Medallion tab for Bronze → Silver → Gold, quarantine, and lineage.</p>
       <div className="table-wrap"><table>
         <thead><tr><th>Pipeline</th><th>Source → Destination</th><th>Last run</th><th></th></tr></thead>
         <tbody>{state.pipelines.map((p) => (
@@ -502,6 +506,82 @@ function PipelinesView({ state, mutate, audit }: { state: AppState; mutate: (fn:
           {r.exceptions.length === 0 && <p className="small ok">No exceptions.</p>}
         </div>
       ))}
+    </section>
+  );
+}
+/* ---------------- Medallion ---------------- */
+function MedallionView({ state, audit }: { state: AppState; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void }) {
+  const batchId = defaultBatchId(state);
+  const snapshot = useMemo(() => buildMedallion(state, batchId), [state, batchId]);
+  const [runs, setRuns] = useState<MedallionBatchRun[]>([]);
+  const [lookup, setLookup] = useState('INV-2041');
+  const [copiedId, setCopiedId] = useState('');
+  const watermarkRef = useRef<Set<string>>(new Set());
+  const lineage = useMemo(() => lineageForRecord(state, lookup.trim() || 'INV-2041', batchId), [state, lookup, batchId]);
+  const runBatch = () => {
+    const run = runMedallionBatch(state, batchId, watermarkRef.current);
+    setRuns((prev) => [run, ...prev]);
+    audit('system', 'medallion_run', `Medallion batch ${run.batchId}: ${run.newRecords} new records, ${run.skippedRecords} skipped by watermark, ${run.retries} retries. Bronze ${run.snapshot.bronzeTotal} = Silver passed ${run.snapshot.silverPassed} + quarantined ${run.snapshot.silverQuarantined}.`);
+  };
+  const copyPrompt = (id: string, prompt: string) => {
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(prompt).then(() => setCopiedId(id)).catch(() => setCopiedId(id));
+    } else {
+      setCopiedId(id);
+    }
+  };
+  return (
+    <section>
+      <h1>Medallion — Bronze → Silver → Gold</h1>
+      <p className="muted">One operator runs the whole platform: if a pipeline fails, that person fixes it with the Copilot prompt on the failure card — no 5–6 person engineer team. Bad records go to quarantine, never silently dropped; Gold is rebuilt from Silver, never edited directly. Batch {snapshot.batchId} · watermark: only records not seen before are re-validated.</p>
+      <div className="cards">
+        <div className="card"><div className="num">{snapshot.bronzeTotal}</div><div className="lbl">Bronze — raw as received (immutable) · {snapshot.bronzeBySource.customers} customers + {snapshot.bronzeBySource.ledger} ledger + {snapshot.bronzeBySource.usage} usage</div></div>
+        <div className="card"><div className="num">{snapshot.silverPassed}</div><div className="lbl">Silver — passed the quality gates · {snapshot.silverQuarantined} quarantined</div></div>
+        <div className="card"><div className="num">{snapshot.gold.ledgerReconciled}</div><div className="lbl">Gold — reconciled ledger entries · ${snapshot.gold.ledgerReconciledTotal.toFixed(2)}</div></div>
+        <div className="card"><div className="num">{snapshot.gold.customers360}</div><div className="lbl">Gold — Customer 360 · {snapshot.gold.usageRollup} usage rollups, {snapshot.gold.usageTotalGb} GB</div></div>
+      </div>
+      <p className="small muted">Reconciliation: Bronze {snapshot.bronzeTotal} = Silver passed {snapshot.silverPassed} + quarantined {snapshot.silverQuarantined}. Gold is built only from Silver-passed records.</p>
+      <div className="row">
+        <button className="btn accent" onClick={runBatch}>Run incremental batch</button>
+        <span className="small muted">First run processes {snapshot.bronzeTotal} records; run it again and the watermark skips them all — 0 new, {snapshot.bronzeTotal} skipped. A failed step is retried once, then quarantined — the batch never fails outright.</span>
+      </div>
+      {runs.length > 0 && runs.slice(0, 3).map((r) => (
+        <div key={`${r.batchId}-${r.newRecords}-${runs.indexOf(r)}`} className="panel">
+          <div className="row space"><strong>Batch {r.batchId}</strong><span className="small muted">{r.newRecords} new · {r.skippedRecords} skipped by watermark · {r.retries} retries</span></div>
+          <p className="small">Bronze {r.snapshot.bronzeTotal} = Silver passed {r.snapshot.silverPassed} + quarantined {r.snapshot.silverQuarantined} · Gold ledger {r.snapshot.gold.ledgerReconciled} entries, ${r.snapshot.gold.ledgerReconciledTotal.toFixed(2)}</p>
+        </div>
+      ))}
+      <h2 className="mt">Quarantine ({snapshot.quarantine.length}) — listed, never silently dropped</h2>
+      {snapshot.quarantine.length === 0 ? <p className="muted">Nothing quarantined.</p> : (
+        <div className="table-wrap"><table>
+          <thead><tr><th>Record</th><th>Pipeline</th><th>Reason</th></tr></thead>
+          <tbody>{snapshot.quarantine.map((q) => (
+            <tr key={q.recordId}><td><strong>{q.recordId}</strong><br /><span className="small muted">{q.recordKind}</span></td><td>{q.pipelineId}</td><td>{q.reason}</td></tr>
+          ))}</tbody>
+        </table></div>
+      )}
+      <h2 className="mt">Lineage — trace any record Bronze → Silver → Gold</h2>
+      <div className="row"><input className="search" type="text" value={lookup} onChange={(e) => setLookup(e.target.value)} placeholder="Invoice, ledger id or customer id — e.g. INV-2041" /><span className="small muted">Try INV-2039 (clean) or CUST-1004 (suspended).</span></div>
+      <div className="panel highlight mt">
+        {lineage.map((s) => (
+          <div key={s.layer} className={`step ${s.status === 'quarantined' || s.status === 'excluded' ? 'failed' : ''}`}>
+            <span className="dot" />
+            <div><strong>{s.layer}</strong> — {s.status}<br /><span className="small">{s.detail}</span></div>
+          </div>
+        ))}
+      </div>
+      <h2 className="mt">Failure cards — one operator + Copilot</h2>
+      <p className="small muted">Each card has what failed, the exact record and batch, the error, and a ready-to-paste Copilot prompt naming the file and function to fix. Fix in Bronze/Silver, re-run the batch — never edit Gold directly.</p>
+      {snapshot.failureCards.map((card) => (
+        <div key={card.id} className="panel">
+          <div className="row space"><strong>{card.id}</strong><span className="small muted">{card.pipelineId} · batch {card.batchId}</span></div>
+          <p className="small"><strong>What failed:</strong> {card.what}</p>
+          <p className="small"><strong>Fix here:</strong> {card.fixFile}, {card.fixFunction}</p>
+          <pre className="log">{card.copilotPrompt}</pre>
+          <button className="btn small secondary" onClick={() => copyPrompt(card.id, card.copilotPrompt)}>{copiedId === card.id ? 'Copied — paste it into Copilot' : 'Copy Copilot prompt'}</button>
+        </div>
+      ))}
+      <p className="small muted mt">Scale, honestly: this demo runs on the 20-customer synthetic seed (106 records). Petabyte scale is architectural — partitioning by ingest date + customer, incremental watermark loads, dedup by idempotency key — and is not measured at petabyte volume here. The same code paths run at both scales. See docs/OPERATOR_RUNBOOK.md for the 1-person operations guide.</p>
     </section>
   );
 }

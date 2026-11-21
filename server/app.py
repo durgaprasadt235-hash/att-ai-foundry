@@ -26,6 +26,7 @@ from engine import (
     eval_score,
     validate_pipeline,
 )
+from medallion import build_medallion, default_batch_id, spark_job_reference
 from stair_retriever import answer as stair_answer, load_trees, measure_eval
 
 app = FastAPI(title="AT&T AI Foundry — reference backend", version="1.0.0")
@@ -92,6 +93,22 @@ def rag_search(req: RagRequest) -> dict:
     state = load_state()
     result = grounded_answer(state["docs"], req.query)
     return {"query": req.query, **result, "llm": False}
+
+
+@app.get("/medallion")
+def medallion_snapshot() -> dict:
+    """Bronze → Silver → Gold snapshot for the seeded state, with the
+    quarantine list and reconciliation (bronze = silver passed +
+    quarantined). Gold aggregates use only Silver-passed records."""
+    state = load_state()
+    return build_medallion(state, default_batch_id(state))
+
+
+@app.get("/medallion/spark-job")
+def medallion_spark_job() -> dict:
+    """Databricks / Spark job outline for production. Reference only —
+    it is not executed; the demo runs the same logic in plain Python."""
+    return spark_job_reference()
 
 
 @app.post("/pipelines/validate")

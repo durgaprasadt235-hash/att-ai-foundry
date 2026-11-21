@@ -119,6 +119,54 @@ Execute → ledger / order / plan / ticket changes → notify → verify
 Measured outcomes (Dashboard) + per-run traces + audit log (Observability)
 ```
 
+## Medallion architecture — Bronze → Silver → Gold (one operator)
+
+**The operator story:** a single person runs this whole data platform.
+When a pipeline fails, that one person fixes it with help from GitHub
+Copilot — no 5–6 person engineer team. Every failure produces a
+structured card with what failed, the exact record and batch, the error,
+and a ready-to-paste Copilot prompt naming the file and function to fix.
+The full 1-person guide is `docs/OPERATOR_RUNBOOK.md`.
+
+- **Bronze — raw, immutable, schema-on-read.** CRM + billing + usage
+  exactly as received, every record kept with batch id, ingest timestamp
+  and source. Nothing is ever deleted or edited in Bronze.
+- **Silver — cleaned, validated, deduplicated, reconciled.** The Silver
+  quality gates are the per-pipeline validators (`validatePipeline` /
+  `validate_pipeline`): duplicates, unknown customers, zero amounts,
+  suspended accounts with a balance, negative usage. A record that fails
+  a gate goes to **quarantine** — listed with its reason, never silently
+  dropped, and never blocking the rest of the batch.
+- **Gold — business-ready aggregates, built only from Silver-passed
+  records.** Customer 360, reconciled ledger, usage rollups, dashboard
+  ROI. Gold is never edited directly — fix Bronze/Silver and re-run.
+
+**Measured on the seed (batch B-2026-11-21):** Bronze 106 records
+(20 customers + 66 ledger + 20 usage) = Silver passed 101 + quarantined
+5 (2 suspended-with-balance customers, 3 duplicate ledger charges).
+Gold: Customer 360 = 20 customers, reconciled ledger = 63 entries
+totalling $2,318.95, usage rollup = 20 records (275.85 GB, 7,281 min,
+1,638 SMS). Lineage is shown in the Medallion tab — e.g. INV-2041:
+Bronze raw → Silver quarantined as a duplicate of INV-2039 → Gold
+excluded from the reconciled ledger, while the agent's $87.40 credit
+(CASE-1001) is what reaches Gold.
+
+**Automation:** batches are incremental by watermark — only records not
+seen before are re-validated (run it twice: first run 106 new, second
+run 0 new, 106 skipped). A failed step is retried once, then the bad
+records are quarantined and the batch completes anyway. Every run is
+recorded in pipeline runs + the audit log.
+
+**Petabyte scale, honestly:** the demo runs on 106 synthetic records.
+Petabyte scale is architectural, not measured here — partitioning by
+ingest date + customer, incremental watermark loads, dedup by
+idempotency key, schema evolution rules, quarantine instead of blocking.
+The same code paths run at both scales, and the production Spark shape
+is outlined in `server/medallion.py:spark_job_reference` (Databricks,
+Auto Loader → Bronze, watermark-filtered Silver, Gold rebuilt from
+Silver) and `GET /medallion/spark-job`. **No petabyte performance was
+measured in this demo — do not claim it was.**
+
 ## How to run
 
 ```bash
@@ -210,24 +258,32 @@ silent success.
   stated assumptions from POL-005 / the footer, not measured cloud bills.
 - One-click demo case: CASE-1001 is pre-seeded and ready; the other cases
   are one click each from the Cases view.
+- Medallion petabyte scale is architectural, not measured: the demo seed
+  is 106 records (20 customers, 66 ledger, 20 usage). Partitioning,
+  watermarks and idempotency-key dedup are designed for petabyte volume,
+  but no petabyte run was performed or timed in this prototype.
 
 ## Files
 
 ```
 src/lib/engine.ts      deterministic agent engine (TS) — plan by case type
 src/lib/groq.ts        live Groq client (TS) — leaf pick + summary, User-Agent att-ai-foundry/1.0
+src/lib/medallion.ts   Medallion Bronze → Silver → Gold (TS) — snapshot, lineage, failure cards, incremental batches
 src/lib/stair.ts       STAIR retriever (TS) + eval set + measured recall
 src/lib/seed.ts        synthetic seed: 20 customers, 12 cases, 8 docs, 3 trees
-src/lib/types.ts       record types
-src/App.tsx            Dashboard, Customers, Cases, Pipelines, RAG, STAIR, Evals, Observability
+src/lib/types.ts       record types (incl. Medallion snapshot / quarantine / failure card)
+src/App.tsx            Dashboard, Customers, Cases, Pipelines, Medallion, RAG, STAIR, Evals, Observability
 api/                   Vercel serverless: health, run-case, rag, stair
+docs/OPERATOR_RUNBOOK.md  1-person operations: daily loop, common failures + Copilot prompts, never-do list
 server/engine.py       Python port of the agent engine (live_llm mode included)
 server/groq_client.py  live Groq client (Python) — leaf pick + summary, User-Agent att-ai-foundry/1.0
+server/medallion.py    Medallion Bronze → Silver → Gold (Python) + Databricks/Spark job reference
 server/stair_retriever.py  STAIR (Python) with trie allowlist
-server/app.py          FastAPI reference backend (live_llm flag on /cases/{id}/plan)
+server/app.py          FastAPI reference backend (live_llm flag on /cases/{id}/plan; GET /medallion)
 server/test_engine.py  pytest: 26 tests (billing + 4 journeys + evals)
 server/test_stair.py   pytest: 8 tests (valid leaf, intact section, refusal)
 server/test_groq.py    pytest: 11 tests (mocked Groq — success, invalid pick, 429, missing key)
+server/test_medallion.py  pytest: Medallion reconciliation, Gold aggregates, lineage, failure cards, incremental batches
 server/seed.json       seed state shared with the Python backend
 vercel.json            SPA fallback excludes /api/* (do not change this)
 ```

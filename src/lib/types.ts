@@ -206,3 +206,59 @@ export const GOODWILL_APPROVAL_THRESHOLD_USD = 25;
 export const OUTAGE_MIN_HOURS = 4;
 /** Default plan-change target when the case states no other target. */
 export const DEFAULT_TARGET_PLAN = 'Unlimited Premium';
+
+/* ---------------- Medallion architecture (Bronze → Silver → Gold) ----------------
+ * One operator runs the whole platform; a pipeline failure is fixed by that
+ * one person with help from GitHub Copilot — no 5-6 person engineer team.
+ * Every record carries lineage (bronze batch → silver check → gold), bad
+ * records go to quarantine instead of silently disappearing, and Gold is
+ * never edited directly — it is always rebuilt from Silver. See
+ * docs/OPERATOR_RUNBOOK.md and src/lib/medallion.ts. */
+export interface QuarantinedRecord {
+  recordId: string;
+  recordKind: 'customer' | 'ledger' | 'usage';
+  pipelineId: string;
+  reason: string;
+}
+export interface MedallionFailureCard {
+  id: string;
+  pipelineId: string;
+  what: string;
+  recordId: string;
+  batchId: string;
+  error: string;
+  fixFile: string;
+  fixFunction: string;
+  copilotPrompt: string;
+}
+export interface MedallionGold {
+  customers360: number;
+  ledgerReconciled: number;
+  ledgerReconciledTotal: number;
+  usageRollup: number;
+  usageTotalGb: number;
+  usageTotalMinutes: number;
+  usageTotalSms: number;
+}
+export interface MedallionLineageStep {
+  layer: 'Bronze' | 'Silver' | 'Gold';
+  detail: string;
+  status: 'passed' | 'quarantined' | 'excluded' | 'included';
+}
+export interface MedallionSnapshot {
+  batchId: string;
+  bronzeTotal: number;
+  bronzeBySource: { customers: number; ledger: number; usage: number };
+  silverPassed: number;
+  silverQuarantined: number;
+  gold: MedallionGold;
+  quarantine: QuarantinedRecord[];
+  failureCards: MedallionFailureCard[];
+}
+export interface MedallionBatchRun {
+  batchId: string;
+  newRecords: number;
+  skippedRecords: number;
+  retries: number;
+  snapshot: MedallionSnapshot;
+}

@@ -400,3 +400,19 @@ def test_seeded_cases_1007_1008_1010():
     assert p10.failure_reason is None
     assert p10.proposed_credit is None
     assert p10.effect_data == {"newPlan": "Unlimited Premium", "charge": 22.4}
+
+
+def test_medallion_reconciles_on_real_seed():
+    """Medallion invariant on the real seed: Bronze = Silver passed +
+    quarantined, and Gold ledger matches the reconciled (non-duplicate)
+    ledger. Full Medallion suite lives in test_medallion.py."""
+    from medallion import build_medallion
+
+    seed = json.loads((Path(__file__).parent / "seed.json").read_text())
+    snap = build_medallion(seed, "B-2026-11-21")
+    assert snap["bronzeTotal"] == 106
+    assert snap["bronzeTotal"] == snap["silverPassed"] + snap["silverQuarantined"]
+    assert snap["silverPassed"] == 101
+    assert snap["silverQuarantined"] == 5
+    assert snap["gold"]["ledgerReconciled"] == 63
+    assert snap["gold"]["ledgerReconciledTotal"] == 2318.95

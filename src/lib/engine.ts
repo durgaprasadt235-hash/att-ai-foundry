@@ -389,7 +389,15 @@ export function applyCredit(state: AppState, c: Case, run: AgentRun, dup: Duplic
   return { entry, customer };
 }
 
-export interface PipelineValidation { processed: number; failed: number; exceptions: string[] }
+export interface PipelineValidation {
+  processed: number;
+  failed: number;
+  exceptions: string[];
+  /** Structured quarantine: the same failures as `exceptions`, but with the
+   *  record id attached so Medallion Silver can quarantine by record instead
+   *  of by text. Mirrors server/engine.py validate_pipeline. */
+  quarantined: { recordId: string; recordKind: 'customer' | 'ledger' | 'usage'; reason: string }[];
+}
 
 /** Per-pipeline ETL validation. Each pipeline validates ONLY its own
  *  source — a run's counts and exceptions are that pipeline's, never the
@@ -400,26 +408,31 @@ export function validatePipeline(pipelineId: string, state: AppState): PipelineV
   if (pipelineId === 'PIPE-01') {
     // Customer 360 ingest — customers only.
     const exceptions: string[] = [];
+    const quarantined: PipelineValidation['quarantined'] = [];
     let failed = 0;
     for (const c of state.customers) {
       if (c.status === 'suspended' && c.balance > 0) {
         exceptions.push(`Suspended account with balance: ${c.id} ${c.name} ($${c.balance.toFixed(2)})`);
+        quarantined.push({ recordId: c.id, recordKind: 'customer', reason: `Suspended account with balance $${c.balance.toFixed(2)}` });
         failed += 1;
       }
     }
-    return { processed: state.customers.length, failed, exceptions };
+    return { processed: state.customers.length, failed, exceptions, quarantined };
   }
   if (pipelineId === 'PIPE-02') {
     // Billing ledger reconcile — ledger only.
     const exceptions: string[] = [];
+    const quarantined: PipelineValidation['quarantined'] = [];
     let failed = 0;
     for (const e of state.ledger) {
       if (!state.customers.some((c) => c.id === e.customerId)) {
         exceptions.push(`Ledger ${e.id} references unknown customer ${e.customerId}`);
+        quarantined.push({ recordId: e.id, recordKind: 'ledger', reason: `References unknown customer ${e.customerId}` });
         failed += 1;
       }
       if (e.amount === 0) {
         exceptions.push(`Ledger ${e.id} has a zero amount`);
+        quarantined.push({ recordId: e.id, recordKind: 'ledger', reason: 'Zero amount' });
         failed += 1;
       }
     }
@@ -427,40 +440,46 @@ export function validatePipeline(pipelineId: string, state: AppState): PipelineV
       const dup = findDuplicate(state.ledger, customerId);
       if (dup) {
         exceptions.push(`Duplicate charge: ${customerId} ${dup.original.invoice} + ${dup.duplicate.invoice} ($${dup.duplicate.amount.toFixed(2)})`);
+        quarantined.push({ recordId: dup.duplicate.id, recordKind: 'ledger', reason: `Duplicate charge: ${dup.original.invoice} + ${dup.duplicate.invoice} ($${dup.duplicate.amount.toFixed(2)})` });
         failed += 1;
       }
     }
-    return { processed: state.ledger.length, failed, exceptions };
+    return { processed: state.ledger.length, failed, exceptions, quarantined };
   }
   if (pipelineId === 'PIPE-03') {
     // Usage daily rollup — usage only.
     const exceptions: string[] = [];
+    const quarantined: PipelineValidation['quarantined'] = [];
     let failed = 0;
     for (const u of state.usage) {
       const customer = state.customers.find((c) => c.id === u.customerId);
       if (!customer) {
         exceptions.push(`Usage ${u.id} references unknown customer ${u.customerId}`);
+        quarantined.push({ recordId: u.id, recordKind: 'usage', reason: `References unknown customer ${u.customerId}` });
         failed += 1;
         continue;
       }
       if ((u.dataGb ?? 0) < 0 || (u.minutes ?? 0) < 0 || (u.sms ?? 0) < 0) {
         exceptions.push(`Usage ${u.id} has a negative value (data ${u.dataGb} GB, ${u.minutes} min, ${u.sms} sms)`);
+        quarantined.push({ recordId: u.id, recordKind: 'usage', reason: `Negative value (data ${u.dataGb} GB, ${u.minutes} min, ${u.sms} sms)` });
         failed += 1;
         continue;
       }
       if (!u.month) {
         exceptions.push(`Usage ${u.id} is missing a month`);
+        quarantined.push({ recordId: u.id, recordKind: 'usage', reason: 'Missing month' });
         failed += 1;
         continue;
       }
       if (customer.status === 'active' && (u.dataGb ?? 0) === 0 && (u.minutes ?? 0) === 0 && (u.sms ?? 0) === 0) {
         exceptions.push(`Usage ${u.id}: active account ${u.customerId} recorded zero usage for ${u.month}`);
+        quarantined.push({ recordId: u.id, recordKind: 'usage', reason: `Active account recorded zero usage for ${u.month}` });
         failed += 1;
       }
     }
-    return { processed: state.usage.length, failed, exceptions };
+    return { processed: state.usage.length, failed, exceptions, quarantined };
   }
-  return { processed: 0, failed: 1, exceptions: [`Unknown pipeline ${pipelineId}`] };
+  return { processed: 0, failed: 1, exceptions: [`Unknown pipeline ${pipelineId}`], quarantined: [] };
 }
 
 /** Evaluation suite — 8 checks, 85% release gate. Runs against live state, so
