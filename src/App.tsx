@@ -50,7 +50,7 @@ export default function App() {
 
   useEffect(() => { saveState(state); }, [state]);
   useEffect(() => {
-    fetch('/api/health').then((r) => r.json()).then((j) => setApiStatus(j.ok ? 'API live (deterministic engine, no LLM)' : 'API unavailable — local engine in use')).catch(() => setApiStatus('API unavailable in local dev — local engine in use'));
+    fetch('/api/health').then((r) => r.json()).then((j) => setApiStatus(j.ok ? (j.llm ? 'API live (Groq live LLM configured)' : 'API live (deterministic engine, no LLM key)') : 'API unavailable — local engine in use')).catch(() => setApiStatus('API unavailable in local dev — local engine in use'));
   }, []);
 
   const mutate = (fn: (s: AppState) => AppState) => {
@@ -262,7 +262,7 @@ export default function App() {
         {view === 'evals' && <EvalsView state={state} mutate={mutate} audit={audit} />}
         {view === 'observability' && <ObservabilityView state={state} onReset={() => { const fresh = resetState(); setState(fresh); stateRef.current = fresh; setNotice('Demo data reset to the seeded state.'); }} />}
         <footer>
-          Honest about what is live: frontend ↔ serverless API ↔ agent engine ↔ data store are live-connected inside this prototype, analytics are computed live from real runs, LangGraph-style code is real Python in server/, and RAG/STAIR retrieval is real over seeded policy docs. There is no live LLM key, no real AT&amp;T internal API, and all demo data is synthetic. The agent is deterministic: every step is traced to a ledger record or a cited policy section. Manual baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case (POL-005). Agent cost {money(AGENT_COST_USD)} per run is a stated demo assumption, not a measured cloud bill.
+          Honest about what is live: frontend ↔ serverless API ↔ agent engine ↔ data store are live-connected inside this prototype, analytics are computed live from real runs, LangGraph-style code is real Python in server/, and RAG/STAIR retrieval is real over seeded policy docs. Live Groq (openai/gpt-oss-120b) runs only when GROQ_API_KEY is set — otherwise the agent is deterministic and says so. There is no real AT&amp;T internal API, and all demo data is synthetic. Every step is traced to a ledger record or a cited policy section. Manual baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case (POL-005). Agent cost {money(AGENT_COST_USD)} per run is a stated demo assumption, not a measured cloud bill.
         </footer>
       </div>
     </div>

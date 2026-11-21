@@ -118,6 +118,11 @@ export interface PlanResult {
   effectKind: 'credit' | 'provisioning' | 'outage_credit' | 'plan_change' | 'retention_offer' | 'none';
   effectData: Record<string, string | number>;
   proposedAction: string | null;
+  /** Live-LLM status: 'off' (deterministic default), 'groq', or
+   *  'unavailable, deterministic fallback'. Mirrors server/engine.py. */
+  liveLlm: string;
+  liveSummary: string | null;
+  liveLeafPicks: Record<string, string>;
 }
 
 type StepAdd = (id: string, name: string, tool: string, status: 'done' | 'failed', detail: string, extra?: Partial<RunStep>) => void;
@@ -130,14 +135,29 @@ function makeSteps(): { steps: Omit<RunStep, 'ms'>[]; add: StepAdd } {
 }
 
 function baseResult(): PlanResult {
-  return { steps: [], proposedCredit: null, duplicate: null, citation: null, failureReason: null, effectKind: 'none', effectData: {}, proposedAction: null };
+  return { steps: [], proposedCredit: null, duplicate: null, citation: null, failureReason: null, effectKind: 'none', effectData: {}, proposedAction: null, liveLlm: 'off', liveSummary: null, liveLeafPicks: {} };
+}
+
+/** Live-LLM options for planRun. liveLeafByQuery maps a grounding query to
+ *  a leaf id Groq picked; every id is validated against the TOC allowlist
+ *  here again before it is used — an id that is not in the trees is ignored
+ *  and deterministic STAIR runs instead. */
+export interface PlanRunOptions {
+  liveLeafByQuery?: Record<string, string>;
+  liveLlm?: string;
+  liveSummary?: string | null;
 }
 
 /** Primary grounding is STAIR (structured trees, intact leaf, full path citation).
  *  Chunk RAG remains only as the comparison baseline in the STAIR view. */
-function stairGround(state: AppState, query: string): { leaf: StairLeaf | null; score: number } {
+function stairGround(state: AppState, query: string, liveLeafByQuery?: Record<string, string>): { leaf: StairLeaf | null; score: number; live: boolean } {
+  const hintId = liveLeafByQuery?.[query];
+  if (hintId) {
+    const hinted = (state.stairTrees ?? []).flatMap((t) => t.leaves).find((l) => l.id === hintId);
+    if (hinted) return { leaf: hinted, score: 1, live: true }; // validated against the TOC allowlist
+  }
   const hit = stairRetrieve(state.stairTrees ?? [], query);
-  return hit ? { leaf: hit.leaf, score: hit.score } : { leaf: null, score: 0 };
+  return hit ? { leaf: hit.leaf, score: hit.score, live: false } : { leaf: null, score: 0, live: false };
 }
 
 function intake(state: AppState, c: Case, add: StepAdd): import('./types').Customer | null {
@@ -160,27 +180,42 @@ function retrieve360(state: AppState, c: Case, customer: import('./types').Custo
 }
 
 /** Pure planning phase. No state is changed here. Dispatches by case type. */
-export function planRun(state: AppState, c: Case): PlanResult {
+export function planRun(state: AppState, c: Case, opts: PlanRunOptions = {}): PlanResult {
   const result = baseResult();
+  result.liveLlm = opts.liveLlm ?? 'off';
+  result.liveSummary = opts.liveSummary ?? null;
+  result.liveLeafPicks = opts.liveLeafByQuery ?? {};
   const { steps, add } = makeSteps();
   result.steps = steps;
   const customer = intake(state, c, add);
   if (!customer) { result.failureReason = `Customer ${c.customerId} not found.`; return result; }
   retrieve360(state, c, customer, add);
 
-  if (c.type === 'duplicate_charge') return planBilling(state, c, customer, result, add);
-  if (c.type === 'provisioning') return planProvisioning(state, c, customer, result, add);
-  if (c.type === 'outage') return planOutage(state, c, customer, result, add);
-  if (c.type === 'plan_change') return planPlanChange(state, c, customer, result, add);
-  if (c.type === 'retention') return planRetention(state, c, customer, result, add);
-  add('validate', 'Validate case', 'validate_case', 'failed',
-    `Case type ${c.type} has no agent workflow in this demo. Run stopped — no action proposed.`);
-  result.failureReason = `Case type ${c.type} has no agent workflow in this demo.`;
-  return result;
+  let planned: PlanResult;
+  if (c.type === 'duplicate_charge') planned = planBilling(state, c, customer, result, add, opts);
+  else if (c.type === 'provisioning') planned = planProvisioning(state, c, customer, result, add, opts);
+  else if (c.type === 'outage') planned = planOutage(state, c, customer, result, add, opts);
+  else if (c.type === 'plan_change') planned = planPlanChange(state, c, customer, result, add, opts);
+  else if (c.type === 'retention') planned = planRetention(state, c, customer, result, add, opts);
+  else {
+    add('validate', 'Validate case', 'validate_case', 'failed',
+      `Case type ${c.type} has no agent workflow in this demo. Run stopped — no action proposed.`);
+    result.failureReason = `Case type ${c.type} has no agent workflow in this demo.`;
+    planned = result;
+  }
+  // Record which path actually grounded this run — live Groq or fallback.
+  if (opts.liveLlm === 'groq') {
+    planned.steps.push({ id: 'live-llm', name: 'Live LLM (Groq)', tool: 'groq_chat', status: 'done', retries: 0,
+      detail: 'Live LLM (openai/gpt-oss-120b) picked the STAIR leaf(s) from the TOC allowlist; deterministic validation still applied to every amount and eligibility check.' });
+  } else if (opts.liveLlm === 'unavailable, deterministic fallback') {
+    planned.steps.push({ id: 'live-llm', name: 'Live LLM (Groq)', tool: 'groq_chat', status: 'done', retries: 0,
+      detail: 'Live LLM unavailable — deterministic fallback. The run completed with deterministic STAIR and validation, and no answer was faked.' });
+  }
+  return planned;
 }
 
-function planBilling(state: AppState, c: Case, _customer: import('./types').Customer, result: PlanResult, add: StepAdd): PlanResult {
-  const g = stairGround(state, 'duplicate charge credit policy');
+function planBilling(state: AppState, c: Case, _customer: import('./types').Customer, result: PlanResult, add: StepAdd, opts: PlanRunOptions = {}): PlanResult {
+  const g = stairGround(state, 'duplicate charge credit policy', opts.liveLeafByQuery);
   if (!g.leaf) {
     add('stair-ground', 'STAIR policy grounding', 'stair_retrieve', 'failed', 'No section in the Table of Contents covers duplicate charges. The agent refuses to proceed without grounding.');
     result.failureReason = 'No grounding section found for duplicate charges.';
@@ -210,8 +245,8 @@ function planBilling(state: AppState, c: Case, _customer: import('./types').Cust
   return result;
 }
 
-function planProvisioning(state: AppState, _c: Case, customer: import('./types').Customer, result: PlanResult, add: StepAdd): PlanResult {
-  const g = stairGround(state, 'new line activation provisioning');
+function planProvisioning(state: AppState, _c: Case, customer: import('./types').Customer, result: PlanResult, add: StepAdd, opts: PlanRunOptions = {}): PlanResult {
+  const g = stairGround(state, 'new line activation provisioning', opts.liveLeafByQuery);
   if (!g.leaf) {
     add('stair-ground', 'STAIR policy grounding', 'stair_retrieve', 'failed', 'No section covers new line activation.');
     result.failureReason = 'No grounding section found for provisioning.';
@@ -238,8 +273,8 @@ function planProvisioning(state: AppState, _c: Case, customer: import('./types')
   return result;
 }
 
-function planOutage(state: AppState, c: Case, _customer: import('./types').Customer, result: PlanResult, add: StepAdd): PlanResult {
-  const g = stairGround(state, 'network outage triage diagnose');
+function planOutage(state: AppState, c: Case, _customer: import('./types').Customer, result: PlanResult, add: StepAdd, opts: PlanRunOptions = {}): PlanResult {
+  const g = stairGround(state, 'network outage triage diagnose', opts.liveLeafByQuery);
   if (!g.leaf) {
     add('stair-ground', 'STAIR policy grounding', 'stair_retrieve', 'failed', 'No section covers outage triage.');
     result.failureReason = 'No grounding section found for outage triage.';
@@ -257,7 +292,7 @@ function planOutage(state: AppState, c: Case, _customer: import('./types').Custo
     return result;
   }
   add('diagnose', 'Diagnose from network status', 'check_network_status', 'done', `Network status check: the case record references a network-confirmed outage lasting over ${OUTAGE_MIN_HOURS} hours. Diagnosis: confirmed outage, not a device fault.`);
-  const creditLeaf = stairGround(state, 'outage service credit');
+  const creditLeaf = stairGround(state, 'outage service credit', opts.liveLeafByQuery);
   if (!creditLeaf.leaf) {
     add('credit-check', 'Outage credit check', 'stair_retrieve', 'failed', 'No section covers outage service credits. The credit cannot be grounded, so no credit is proposed.');
     result.failureReason = 'No grounding section found for outage service credit.';
@@ -275,8 +310,8 @@ function planOutage(state: AppState, c: Case, _customer: import('./types').Custo
   return result;
 }
 
-function planPlanChange(state: AppState, c: Case, customer: import('./types').Customer, result: PlanResult, add: StepAdd): PlanResult {
-  const g = stairGround(state, 'plan upgrade price premium starter');
+function planPlanChange(state: AppState, c: Case, customer: import('./types').Customer, result: PlanResult, add: StepAdd, opts: PlanRunOptions = {}): PlanResult {
+  const g = stairGround(state, 'plan upgrade price premium starter', opts.liveLeafByQuery);
   if (!g.leaf) {
     add('stair-ground', 'STAIR policy grounding', 'stair_retrieve', 'failed', 'No section covers upgrade pricing.');
     result.failureReason = 'No grounding section found for plan upgrade pricing.';
@@ -320,8 +355,8 @@ function planPlanChange(state: AppState, c: Case, customer: import('./types').Cu
   return result;
 }
 
-function planRetention(state: AppState, _c: Case, customer: import('./types').Customer, result: PlanResult, add: StepAdd): PlanResult {
-  const g = stairGround(state, 'retention save offer churn');
+function planRetention(state: AppState, _c: Case, customer: import('./types').Customer, result: PlanResult, add: StepAdd, opts: PlanRunOptions = {}): PlanResult {
+  const g = stairGround(state, 'retention save offer churn', opts.liveLeafByQuery);
   if (!g.leaf) {
     add('stair-ground', 'STAIR policy grounding', 'stair_retrieve', 'failed', 'No section covers save offers.');
     result.failureReason = 'No grounding section found for retention save offers.';

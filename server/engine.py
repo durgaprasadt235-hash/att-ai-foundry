@@ -11,7 +11,19 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from stair_retriever import retrieve as stair_retrieve
+from stair_retriever import retrieve as stair_retrieve, all_leaves as stair_all_leaves
+
+try:  # Live Groq is optional: the engine stays deterministic without it.
+    from groq_client import GroqClient, GroqUnavailable, MODEL as GROQ_MODEL
+except ImportError:  # pragma: no cover - groq_client.py is shipped with the engine
+    class GroqUnavailable(Exception):
+        def __init__(self, reason, status=None):
+            super().__init__(reason)
+            self.reason = reason
+            self.status = status
+
+    GroqClient = None  # type: ignore
+    GROQ_MODEL = "openai/gpt-oss-120b"
 
 STOPWORDS = set(
     "a an the is are was were what how why when where which who whom this that "
@@ -135,16 +147,110 @@ class PlanResult:
     effect_kind: str = "none"
     effect_data: dict = field(default_factory=dict)
     proposed_action: str | None = None
+    # Live-LLM status: "off" (deterministic default), "groq" (Groq picked at
+    # least one leaf and the run used it), or "unavailable, deterministic
+    # fallback" (Groq was requested but could not be used; the run still
+    # completed deterministically and nothing was faked).
+    live_llm: str = "off"
+    live_summary: str | None = None
+    live_leaf_picks: dict = field(default_factory=dict)
 
 
-def _stair_ground(state: dict, query: str):
+class _LiveLlm:
+    """Live-LLM context for one run. Groq only ever *picks* a STAIR leaf
+    (from the TOC allowlist) and *drafts* a summary. It never validates,
+    never decides amounts, and never executes anything — human approval
+    still gates every credit and plan change. On the first Groq failure
+    the run goes deterministic for the rest of the run and says so."""
+
+    def __init__(self, client):
+        self.client = client
+        self.picks: dict = {}
+        self.failed_reason: str | None = None
+        self.status = "off"
+
+    @classmethod
+    def unavailable(cls, reason: str) -> "_LiveLlm":
+        live = cls(None)
+        live.failed_reason = reason
+        live.status = "unavailable, deterministic fallback"
+        return live
+
+    @property
+    def alive(self) -> bool:
+        return self.client is not None and self.failed_reason is None
+
+    def ground(self, state: dict, query: str):
+        """Ask Groq to pick the leaf for a grounding query. Returns the
+        leaf dict, or None to mean 'use deterministic STAIR for this query'.
+        A failed pick marks the run as fallback and never retries Groq."""
+        if not self.alive:
+            return None
+        leaves = stair_all_leaves(state.get("stairTrees", []))
+        try:
+            picked_id = self.client.pick_leaf(query, leaves)
+        except GroqUnavailable as e:
+            self.failed_reason = e.reason
+            self.status = "unavailable, deterministic fallback"
+            return None
+        leaf = next((l for l in leaves if l["id"] == picked_id), None)
+        if leaf is None:  # validated again here; cannot happen if client checked
+            self.failed_reason = f"Groq picked unknown leaf id {picked_id!r}"
+            self.status = "unavailable, deterministic fallback"
+            return None
+        self.picks[query] = picked_id
+        self.status = "groq"
+        return leaf
+
+
+def _finalize_live(result: PlanResult, live: "_LiveLlm | None", case: dict, add) -> None:
+    """Record the live-LLM outcome in the trace and, when Groq worked and
+    the plan succeeded, draft the customer-facing summary."""
+    if live is None:
+        return
+    result.live_llm = live.status
+    result.live_leaf_picks = dict(live.picks)
+    if live.failed_reason is not None:
+        add("live-llm", "Live LLM (Groq)", "groq_chat", "done",
+            f"Live LLM unavailable: {live.failed_reason}. "
+            "Deterministic fallback — the run completed with deterministic "
+            "STAIR and validation, and no answer was faked.")
+        return
+    if live.picks:
+        add("live-llm", "Live LLM (Groq)", "groq_chat", "done",
+            f"Live LLM ({GROQ_MODEL}) picked {len(live.picks)} STAIR leaf(s) "
+            "from the TOC allowlist; deterministic validation still applied "
+            "to every amount and eligibility check.")
+    if result.failure_reason is None and result.proposed_action and live.client is not None:
+        try:
+            result.live_summary = live.client.draft_summary(
+                case, result.citation or "", result.proposed_action)
+            add("live-summary", "Customer summary (Groq draft)", "groq_chat", "done",
+                f"Groq drafted the customer-facing summary: “{result.live_summary}”")
+        except GroqUnavailable as e:
+            add("live-summary", "Customer summary (Groq draft)", "groq_chat", "failed",
+                f"Groq could not draft the summary ({e.reason}); the plan itself "
+                "is unaffected — it was computed deterministically.")
+
+
+def _stair_ground(state: dict, query: str, live: "_LiveLlm | None" = None):
+    if live is not None and live.alive:
+        leaf = live.ground(state, query)
+        if leaf is not None:
+            return leaf
     hit = stair_retrieve(state.get("stairTrees", []), query)
     return hit["leaf"] if hit else None
 
 
-def plan_run(state: dict, case: dict) -> PlanResult:
+def plan_run(state: dict, case: dict, live_llm: bool = False, groq_client=None) -> PlanResult:
     """Planning phase. Pure: changes no state. Dispatches by case type.
-    Primary grounding is STAIR (structured trees, intact leaf)."""
+    Primary grounding is STAIR (structured trees, intact leaf).
+
+    live_llm=True requests the live Groq path: Groq picks each STAIR leaf
+    (validated against the TOC allowlist) and drafts the customer summary.
+    The deterministic engine stays the default and the fallback — if Groq
+    is unavailable for any reason, the run proceeds deterministically and
+    the trace records 'live_llm: unavailable, deterministic fallback'."""
     result = PlanResult()
 
     def add(step_id, name, tool, status, detail, citation=None):
@@ -167,25 +273,39 @@ def plan_run(state: dict, case: dict) -> PlanResult:
         f"{customer['name']} ({customer['account']}), {customer['plan']}, "
         f"balance ${customer['balance']:.2f}. {len(ledger)} ledger entries.")
 
+    live = None
+    if live_llm:
+        if groq_client is not None:
+            live = _LiveLlm(groq_client)
+        elif GroqClient is None:
+            live = _LiveLlm.unavailable("Groq client is not installed (server/groq_client.py missing)")
+        else:
+            try:
+                live = _LiveLlm(GroqClient.from_env())
+            except GroqUnavailable as e:
+                live = _LiveLlm.unavailable(e.reason)
+
     ctype = case["type"]
     if ctype == "duplicate_charge":
-        return _plan_billing(state, case, result, add)
-    if ctype == "provisioning":
-        return _plan_provisioning(state, case, customer, result, add)
-    if ctype == "outage":
-        return _plan_outage(state, case, result, add)
-    if ctype == "plan_change":
-        return _plan_plan_change(state, case, customer, result, add)
-    if ctype == "retention":
-        return _plan_retention(state, case, customer, result, add)
-    add("validate", "Validate case", "validate_case", "failed",
-        f"Case type {ctype} has no agent workflow in this demo. Run stopped.")
-    result.failure_reason = f"Case type {ctype} has no agent workflow in this demo."
+        result = _plan_billing(state, case, result, add, live)
+    elif ctype == "provisioning":
+        result = _plan_provisioning(state, case, customer, result, add, live)
+    elif ctype == "outage":
+        result = _plan_outage(state, case, result, add, live)
+    elif ctype == "plan_change":
+        result = _plan_plan_change(state, case, customer, result, add, live)
+    elif ctype == "retention":
+        result = _plan_retention(state, case, customer, result, add, live)
+    else:
+        add("validate", "Validate case", "validate_case", "failed",
+            f"Case type {ctype} has no agent workflow in this demo. Run stopped.")
+        result.failure_reason = f"Case type {ctype} has no agent workflow in this demo."
+    _finalize_live(result, live, case, add)
     return result
 
 
-def _plan_billing(state, case, result, add):
-    leaf = _stair_ground(state, "duplicate charge credit policy")
+def _plan_billing(state, case, result, add, live=None):
+    leaf = _stair_ground(state, "duplicate charge credit policy", live)
     if leaf is None:
         add("stair-ground", "STAIR policy grounding", "stair_retrieve", "failed",
             "No section in the Table of Contents covers duplicate charges.")
@@ -220,8 +340,8 @@ def _plan_billing(state, case, result, add):
     return result
 
 
-def _plan_provisioning(state, case, customer, result, add):
-    leaf = _stair_ground(state, "new line activation provisioning")
+def _plan_provisioning(state, case, customer, result, add, live=None):
+    leaf = _stair_ground(state, "new line activation provisioning", live)
     if leaf is None:
         add("stair-ground", "STAIR policy grounding", "stair_retrieve", "failed", "No section covers new line activation.")
         result.failure_reason = "No grounding section found for provisioning."
@@ -245,8 +365,8 @@ def _plan_provisioning(state, case, customer, result, add):
     return result
 
 
-def _plan_outage(state, case, result, add):
-    leaf = _stair_ground(state, "network outage triage diagnose")
+def _plan_outage(state, case, result, add, live=None):
+    leaf = _stair_ground(state, "network outage triage diagnose", live)
     if leaf is None:
         add("stair-ground", "STAIR policy grounding", "stair_retrieve", "failed", "No section covers outage triage.")
         result.failure_reason = "No grounding section found for outage triage."
@@ -266,7 +386,7 @@ def _plan_outage(state, case, result, add):
     add("diagnose", "Diagnose from network status", "check_network_status", "done",
         f"Network status check: the case record references a network-confirmed outage lasting over {OUTAGE_MIN_HOURS} hours. "
         "Diagnosis: confirmed outage, not a device fault.")
-    credit_leaf = _stair_ground(state, "outage service credit")
+    credit_leaf = _stair_ground(state, "outage service credit", live)
     if credit_leaf is None:
         add("credit-check", "Outage credit check", "stair_retrieve", "failed",
             "No section covers outage service credits. The credit cannot be grounded, so no credit is proposed.")
@@ -289,8 +409,8 @@ def _plan_outage(state, case, result, add):
     return result
 
 
-def _plan_plan_change(state, case, customer, result, add):
-    leaf = _stair_ground(state, "plan upgrade price premium starter")
+def _plan_plan_change(state, case, customer, result, add, live=None):
+    leaf = _stair_ground(state, "plan upgrade price premium starter", live)
     if leaf is None:
         add("stair-ground", "STAIR policy grounding", "stair_retrieve", "failed", "No section covers upgrade pricing.")
         result.failure_reason = "No grounding section found for plan upgrade pricing."
@@ -338,8 +458,8 @@ def _plan_plan_change(state, case, customer, result, add):
     return result
 
 
-def _plan_retention(state, case, customer, result, add):
-    leaf = _stair_ground(state, "retention save offer churn")
+def _plan_retention(state, case, customer, result, add, live=None):
+    leaf = _stair_ground(state, "retention save offer churn", live)
     if leaf is None:
         add("stair-ground", "STAIR policy grounding", "stair_retrieve", "failed", "No section covers save offers.")
         result.failure_reason = "No grounding section found for retention save offers."

@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from engine import (
+    GROQ_MODEL,
     grounded_answer,
     plan_run,
     run_eval_suite,
@@ -47,12 +48,20 @@ class RagRequest(BaseModel):
 class PlanRequest(BaseModel):
     # Full state is posted so the endpoint stays stateless (serverless-safe).
     state: dict
+    # live_llm=True asks Groq (openai/gpt-oss-120b) to pick each STAIR leaf
+    # and draft the summary. GROQ_API_KEY must be set server-side; the key
+    # is never accepted in the request body. Unavailable Groq falls back
+    # to the deterministic engine and the trace says so.
+    live_llm: bool = False
 
 
 @app.get("/health")
 def health() -> dict:
+    """llm: True means a GROQ_API_KEY is configured, so live mode is
+    available — not that a Groq call has succeeded yet."""
     return {"ok": True, "service": "att-ai-foundry", "engine": "deterministic-py",
-            "llm": False, "realAttSystems": False, "demoData": "synthetic"}
+            "llm": bool(os.environ.get("GROQ_API_KEY")), "llmModel": GROQ_MODEL,
+            "realAttSystems": False, "demoData": "synthetic"}
 
 
 @app.post("/cases/{case_id}/plan")
@@ -60,7 +69,7 @@ def plan_case(case_id: str, req: PlanRequest) -> dict:
     case = next((c for c in req.state.get("cases", []) if c["id"] == case_id), None)
     if case is None:
         raise HTTPException(status_code=404, detail=f"Case {case_id} not found.")
-    plan = plan_run(req.state, case)
+    plan = plan_run(req.state, case, live_llm=req.live_llm)
     return {
         "caseId": case_id,
         "status": "failed" if plan.failure_reason else "awaiting_approval",
@@ -68,6 +77,9 @@ def plan_case(case_id: str, req: PlanRequest) -> dict:
         "proposedCredit": plan.proposed_credit,
         "citation": plan.citation,
         "steps": plan.steps,
+        "liveLlm": plan.live_llm,
+        "liveLeafPicks": plan.live_leaf_picks,
+        "liveSummary": plan.live_summary,
         "note": "Planning only. A credit is posted only after human approval; this endpoint moves no money.",
     }
 
