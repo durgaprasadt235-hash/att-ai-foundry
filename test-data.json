@@ -1,0 +1,1438 @@
+{
+  "customers": [
+    {
+      "id": "CUST-1001",
+      "name": "Maya Rodriguez",
+      "account": "ACC-884120",
+      "phone": "(201) 555-0142",
+      "email": "maya.rodriguez.demo@example.com",
+      "plan": "Unlimited Premium",
+      "status": "active",
+      "since": "2022-02-02",
+      "balance": 194.32,
+      "city": "Jersey City, NJ"
+    },
+    {
+      "id": "CUST-1002",
+      "name": "Noah Mercer",
+      "account": "ACC-884121",
+      "phone": "(201) 555-0102",
+      "email": "noah.mercer.demo@example.com",
+      "plan": "Unlimited Starter",
+      "status": "active",
+      "since": "2023-03-03",
+      "balance": 150.04,
+      "city": "Newark, NJ"
+    },
+    {
+      "id": "CUST-1003",
+      "name": "Avery Sloan",
+      "account": "ACC-884122",
+      "phone": "(201) 555-0103",
+      "email": "avery.sloan.demo@example.com",
+      "plan": "Business Elite",
+      "status": "active",
+      "since": "2024-04-04",
+      "balance": 244.56,
+      "city": "Hoboken, NJ"
+    },
+    {
+      "id": "CUST-1004",
+      "name": "Lena Hartwell",
+      "account": "ACC-884123",
+      "phone": "(201) 555-0104",
+      "email": "lena.hartwell.demo@example.com",
+      "plan": "Family Share",
+      "status": "suspended",
+      "since": "2025-05-05",
+      "balance": 119.08,
+      "city": "Paterson, NJ"
+    },
+    {
+      "id": "CUST-1005",
+      "name": "Elias Rowan",
+      "account": "ACC-884124",
+      "phone": "(201) 555-0105",
+      "email": "elias.rowan.demo@example.com",
+      "plan": "Unlimited Premium",
+      "status": "active",
+      "since": "2021-06-06",
+      "balance": 151.75,
+      "city": "Edison, NJ"
+    },
+    {
+      "id": "CUST-1006",
+      "name": "Nina Calder",
+      "account": "ACC-884125",
+      "phone": "(201) 555-0106",
+      "email": "nina.calder.demo@example.com",
+      "plan": "Unlimited Starter",
+      "status": "active",
+      "since": "2022-07-07",
+      "balance": 97.12,
+      "city": "Trenton, NJ"
+    },
+    {
+      "id": "CUST-1007",
+      "name": "Owen Vale",
+      "account": "ACC-884126",
+      "phone": "(201) 555-0107",
+      "email": "owen.vale.demo@example.com",
+      "plan": "Business Elite",
+      "status": "active",
+      "since": "2023-08-08",
+      "balance": 99.64,
+      "city": "Elizabeth, NJ"
+    },
+    {
+      "id": "CUST-1008",
+      "name": "Tessa Marlow",
+      "account": "ACC-884127",
+      "phone": "(201) 555-0108",
+      "email": "tessa.marlow.demo@example.com",
+      "plan": "Family Share",
+      "status": "active",
+      "since": "2024-09-09",
+      "balance": 121.16,
+      "city": "Bayonne, NJ"
+    },
+    {
+      "id": "CUST-1009",
+      "name": "Kai Ellison",
+      "account": "ACC-884128",
+      "phone": "(201) 555-0109",
+      "email": "kai.ellison.demo@example.com",
+      "plan": "Unlimited Premium",
+      "status": "active",
+      "since": "2025-01-10",
+      "balance": 111.08,
+      "city": "Clifton, NJ"
+    },
+    {
+      "id": "CUST-1010",
+      "name": "Iris Fenwick",
+      "account": "ACC-884129",
+      "phone": "(201) 555-0110",
+      "email": "iris.fenwick.demo@example.com",
+      "plan": "Unlimited Starter",
+      "status": "active",
+      "since": "2021-02-11",
+      "balance": 89.2,
+      "city": "Montclair, NJ"
+    },
+    {
+      "id": "CUST-1011",
+      "name": "Theo Winslow",
+      "account": "ACC-884130",
+      "phone": "(201) 555-0111",
+      "email": "theo.winslow.demo@example.com",
+      "plan": "Business Elite",
+      "status": "suspended",
+      "since": "2022-03-12",
+      "balance": 136.72,
+      "city": "Hackensack, NJ"
+    },
+    {
+      "id": "CUST-1012",
+      "name": "Jade Brinley",
+      "account": "ACC-884131",
+      "phone": "(201) 555-0112",
+      "email": "jade.brinley.demo@example.com",
+      "plan": "Family Share",
+      "status": "active",
+      "since": "2023-04-13",
+      "balance": 123.24,
+      "city": "Paramus, NJ"
+    },
+    {
+      "id": "CUST-1013",
+      "name": "Milo Keene",
+      "account": "ACC-884132",
+      "phone": "(201) 555-0113",
+      "email": "milo.keene.demo@example.com",
+      "plan": "Unlimited Premium",
+      "status": "active",
+      "since": "2024-05-14",
+      "balance": 113.16,
+      "city": "Morristown, NJ"
+    },
+    {
+      "id": "CUST-1014",
+      "name": "Cora Ashford",
+      "account": "ACC-884133",
+      "phone": "(201) 555-0114",
+      "email": "cora.ashford.demo@example.com",
+      "plan": "Unlimited Starter",
+      "status": "active",
+      "since": "2025-06-15",
+      "balance": 91.28,
+      "city": "Princeton, NJ"
+    },
+    {
+      "id": "CUST-1015",
+      "name": "Ezra Halden",
+      "account": "ACC-884134",
+      "phone": "(201) 555-0115",
+      "email": "ezra.halden.demo@example.com",
+      "plan": "Business Elite",
+      "status": "active",
+      "since": "2021-07-16",
+      "balance": 138.8,
+      "city": "New Brunswick, NJ"
+    },
+    {
+      "id": "CUST-1016",
+      "name": "Ruby Voss",
+      "account": "ACC-884135",
+      "phone": "(201) 555-0116",
+      "email": "ruby.voss.demo@example.com",
+      "plan": "Family Share",
+      "status": "active",
+      "since": "2022-08-17",
+      "balance": 125.32,
+      "city": "Bloomfield, NJ"
+    },
+    {
+      "id": "CUST-1017",
+      "name": "Finn Delaney",
+      "account": "ACC-884136",
+      "phone": "(201) 555-0117",
+      "email": "finn.delaney.demo@example.com",
+      "plan": "Unlimited Premium",
+      "status": "active",
+      "since": "2023-09-18",
+      "balance": 115.24,
+      "city": "Secaucus, NJ"
+    },
+    {
+      "id": "CUST-1018",
+      "name": "Sage Whitmore",
+      "account": "ACC-884137",
+      "phone": "(201) 555-0118",
+      "email": "sage.whitmore.demo@example.com",
+      "plan": "Unlimited Starter",
+      "status": "active",
+      "since": "2024-01-19",
+      "balance": 93.36,
+      "city": "Union City, NJ"
+    },
+    {
+      "id": "CUST-1019",
+      "name": "Aria Bellamy",
+      "account": "ACC-884138",
+      "phone": "(201) 555-0119",
+      "email": "aria.bellamy.demo@example.com",
+      "plan": "Business Elite",
+      "status": "closed",
+      "since": "2025-02-20",
+      "balance": 140.88,
+      "city": "Westfield, NJ"
+    },
+    {
+      "id": "CUST-1020",
+      "name": "Leo Camden",
+      "account": "ACC-884139",
+      "phone": "(201) 555-0120",
+      "email": "leo.camden.demo@example.com",
+      "plan": "Family Share",
+      "status": "closed",
+      "since": "2021-03-21",
+      "balance": 127.4,
+      "city": "Rahway, NJ"
+    }
+  ],
+  "ledger": [
+    {
+      "id": "LED-01",
+      "customerId": "CUST-1001",
+      "invoice": "INV-2039",
+      "date": "2026-11-08",
+      "service": "Unlimited Premium — monthly plan",
+      "amount": 87.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-02",
+      "customerId": "CUST-1001",
+      "invoice": "INV-3011",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 16.35,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-03",
+      "customerId": "CUST-1001",
+      "invoice": "INV-3012",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 3.17,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-04",
+      "customerId": "CUST-1002",
+      "invoice": "INV-3020",
+      "date": "2026-11-08",
+      "service": "Unlimited Starter — monthly plan",
+      "amount": 65.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-05",
+      "customerId": "CUST-1002",
+      "invoice": "INV-3021",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 16.7,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-06",
+      "customerId": "CUST-1002",
+      "invoice": "INV-3022",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 3.34,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-07",
+      "customerId": "CUST-1003",
+      "invoice": "INV-3030",
+      "date": "2026-11-08",
+      "service": "Business Elite — monthly plan",
+      "amount": 112.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-08",
+      "customerId": "CUST-1003",
+      "invoice": "INV-3031",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 17.05,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-09",
+      "customerId": "CUST-1003",
+      "invoice": "INV-3032",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 3.51,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-10",
+      "customerId": "CUST-1004",
+      "invoice": "INV-3040",
+      "date": "2026-11-08",
+      "service": "Family Share — monthly plan",
+      "amount": 98.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-11",
+      "customerId": "CUST-1004",
+      "invoice": "INV-3041",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 17.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-12",
+      "customerId": "CUST-1004",
+      "invoice": "INV-3042",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 3.68,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-13",
+      "customerId": "CUST-1005",
+      "invoice": "INV-3050",
+      "date": "2026-11-08",
+      "service": "Unlimited Premium — monthly plan",
+      "amount": 87.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-14",
+      "customerId": "CUST-1005",
+      "invoice": "INV-3051",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 17.75,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-15",
+      "customerId": "CUST-1005",
+      "invoice": "INV-3052",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 3.85,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-16",
+      "customerId": "CUST-1006",
+      "invoice": "INV-3060",
+      "date": "2026-11-08",
+      "service": "Unlimited Starter — monthly plan",
+      "amount": 65.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-17",
+      "customerId": "CUST-1006",
+      "invoice": "INV-3061",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 18.1,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-18",
+      "customerId": "CUST-1006",
+      "invoice": "INV-3062",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 4.02,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-19",
+      "customerId": "CUST-1007",
+      "invoice": "INV-3070",
+      "date": "2026-11-08",
+      "service": "Business Elite — monthly plan",
+      "amount": 112.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-20",
+      "customerId": "CUST-1007",
+      "invoice": "INV-3071",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 18.45,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-21",
+      "customerId": "CUST-1007",
+      "invoice": "INV-3072",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 4.19,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-22",
+      "customerId": "CUST-1008",
+      "invoice": "INV-3080",
+      "date": "2026-11-08",
+      "service": "Family Share — monthly plan",
+      "amount": 98.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-23",
+      "customerId": "CUST-1008",
+      "invoice": "INV-3081",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 18.8,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-24",
+      "customerId": "CUST-1008",
+      "invoice": "INV-3082",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 4.36,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-25",
+      "customerId": "CUST-1009",
+      "invoice": "INV-3090",
+      "date": "2026-11-08",
+      "service": "Unlimited Premium — monthly plan",
+      "amount": 87.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-26",
+      "customerId": "CUST-1009",
+      "invoice": "INV-3091",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 19.15,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-27",
+      "customerId": "CUST-1009",
+      "invoice": "INV-3092",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 4.53,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-28",
+      "customerId": "CUST-1010",
+      "invoice": "INV-3100",
+      "date": "2026-11-08",
+      "service": "Unlimited Starter — monthly plan",
+      "amount": 65.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-29",
+      "customerId": "CUST-1010",
+      "invoice": "INV-3101",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 19.5,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-30",
+      "customerId": "CUST-1010",
+      "invoice": "INV-3102",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 4.7,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-31",
+      "customerId": "CUST-1011",
+      "invoice": "INV-3110",
+      "date": "2026-11-08",
+      "service": "Business Elite — monthly plan",
+      "amount": 112.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-32",
+      "customerId": "CUST-1011",
+      "invoice": "INV-3111",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 19.85,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-33",
+      "customerId": "CUST-1011",
+      "invoice": "INV-3112",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 4.87,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-34",
+      "customerId": "CUST-1012",
+      "invoice": "INV-3120",
+      "date": "2026-11-08",
+      "service": "Family Share — monthly plan",
+      "amount": 98.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-35",
+      "customerId": "CUST-1012",
+      "invoice": "INV-3121",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 20.2,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-36",
+      "customerId": "CUST-1012",
+      "invoice": "INV-3122",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 5.04,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-37",
+      "customerId": "CUST-1013",
+      "invoice": "INV-3130",
+      "date": "2026-11-08",
+      "service": "Unlimited Premium — monthly plan",
+      "amount": 87.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-38",
+      "customerId": "CUST-1013",
+      "invoice": "INV-3131",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 20.55,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-39",
+      "customerId": "CUST-1013",
+      "invoice": "INV-3132",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 5.21,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-40",
+      "customerId": "CUST-1014",
+      "invoice": "INV-3140",
+      "date": "2026-11-08",
+      "service": "Unlimited Starter — monthly plan",
+      "amount": 65.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-41",
+      "customerId": "CUST-1014",
+      "invoice": "INV-3141",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 20.9,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-42",
+      "customerId": "CUST-1014",
+      "invoice": "INV-3142",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 5.38,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-43",
+      "customerId": "CUST-1015",
+      "invoice": "INV-3150",
+      "date": "2026-11-08",
+      "service": "Business Elite — monthly plan",
+      "amount": 112.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-44",
+      "customerId": "CUST-1015",
+      "invoice": "INV-3151",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 21.25,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-45",
+      "customerId": "CUST-1015",
+      "invoice": "INV-3152",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 5.55,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-46",
+      "customerId": "CUST-1016",
+      "invoice": "INV-3160",
+      "date": "2026-11-08",
+      "service": "Family Share — monthly plan",
+      "amount": 98.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-47",
+      "customerId": "CUST-1016",
+      "invoice": "INV-3161",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 21.6,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-48",
+      "customerId": "CUST-1016",
+      "invoice": "INV-3162",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 5.72,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-49",
+      "customerId": "CUST-1017",
+      "invoice": "INV-3170",
+      "date": "2026-11-08",
+      "service": "Unlimited Premium — monthly plan",
+      "amount": 87.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-50",
+      "customerId": "CUST-1017",
+      "invoice": "INV-3171",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 21.95,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-51",
+      "customerId": "CUST-1017",
+      "invoice": "INV-3172",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 5.89,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-52",
+      "customerId": "CUST-1018",
+      "invoice": "INV-3180",
+      "date": "2026-11-08",
+      "service": "Unlimited Starter — monthly plan",
+      "amount": 65.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-53",
+      "customerId": "CUST-1018",
+      "invoice": "INV-3181",
+      "date": "2026-11-09",
+      "service": "Device installment",
+      "amount": 22.3,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-54",
+      "customerId": "CUST-1018",
+      "invoice": "INV-3182",
+      "date": "2026-11-10",
+      "service": "Regulatory recovery charge",
+      "amount": 6.06,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-55",
+      "customerId": "CUST-1019",
+      "invoice": "INV-3190",
+      "date": "2026-10-08",
+      "service": "Business Elite — monthly plan",
+      "amount": 112.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-56",
+      "customerId": "CUST-1019",
+      "invoice": "INV-3191",
+      "date": "2026-10-09",
+      "service": "Device installment",
+      "amount": 22.65,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-57",
+      "customerId": "CUST-1019",
+      "invoice": "INV-3192",
+      "date": "2026-10-10",
+      "service": "Regulatory recovery charge",
+      "amount": 6.23,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-58",
+      "customerId": "CUST-1020",
+      "invoice": "INV-3200",
+      "date": "2026-10-08",
+      "service": "Family Share — monthly plan",
+      "amount": 98.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-59",
+      "customerId": "CUST-1020",
+      "invoice": "INV-3201",
+      "date": "2026-10-09",
+      "service": "Device installment",
+      "amount": 23.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-60",
+      "customerId": "CUST-1020",
+      "invoice": "INV-3202",
+      "date": "2026-10-10",
+      "service": "Regulatory recovery charge",
+      "amount": 6.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-61",
+      "customerId": "CUST-1001",
+      "invoice": "INV-2041",
+      "date": "2026-11-14",
+      "service": "Unlimited Premium — monthly plan",
+      "amount": 87.4,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-62",
+      "customerId": "CUST-1002",
+      "invoice": "INV-2042",
+      "date": "2026-11-13",
+      "service": "Unlimited Starter — monthly plan",
+      "amount": 65.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-63",
+      "customerId": "CUST-1003",
+      "invoice": "INV-2043",
+      "date": "2026-11-12",
+      "service": "Business Elite — monthly plan",
+      "amount": 112.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-64",
+      "customerId": "CUST-1005",
+      "invoice": "INV-3501",
+      "date": "2026-11-11",
+      "service": "International roaming — Canada",
+      "amount": 42.75,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-65",
+      "customerId": "CUST-1006",
+      "invoice": "INV-3502",
+      "date": "2026-11-11",
+      "service": "Late payment fee",
+      "amount": 10.0,
+      "kind": "charge",
+      "status": "posted"
+    },
+    {
+      "id": "LED-66",
+      "customerId": "CUST-1007",
+      "invoice": "INV-3503",
+      "date": "2026-11-12",
+      "service": "Account payment",
+      "amount": 35.0,
+      "kind": "payment",
+      "status": "posted"
+    }
+  ],
+  "usage": [
+    {
+      "id": "USE-01",
+      "customerId": "CUST-1001",
+      "month": "2026-11",
+      "dataGb": 3.85,
+      "minutes": 141,
+      "sms": 23
+    },
+    {
+      "id": "USE-02",
+      "customerId": "CUST-1002",
+      "month": "2026-11",
+      "dataGb": 5.2,
+      "minutes": 172,
+      "sms": 31
+    },
+    {
+      "id": "USE-03",
+      "customerId": "CUST-1003",
+      "month": "2026-11",
+      "dataGb": 6.55,
+      "minutes": 203,
+      "sms": 39
+    },
+    {
+      "id": "USE-04",
+      "customerId": "CUST-1004",
+      "month": "2026-11",
+      "dataGb": 7.9,
+      "minutes": 234,
+      "sms": 47
+    },
+    {
+      "id": "USE-05",
+      "customerId": "CUST-1005",
+      "month": "2026-11",
+      "dataGb": 9.25,
+      "minutes": 265,
+      "sms": 55
+    },
+    {
+      "id": "USE-06",
+      "customerId": "CUST-1006",
+      "month": "2026-11",
+      "dataGb": 10.6,
+      "minutes": 296,
+      "sms": 63
+    },
+    {
+      "id": "USE-07",
+      "customerId": "CUST-1007",
+      "month": "2026-11",
+      "dataGb": 11.95,
+      "minutes": 327,
+      "sms": 71
+    },
+    {
+      "id": "USE-08",
+      "customerId": "CUST-1008",
+      "month": "2026-11",
+      "dataGb": 13.3,
+      "minutes": 358,
+      "sms": 79
+    },
+    {
+      "id": "USE-09",
+      "customerId": "CUST-1009",
+      "month": "2026-11",
+      "dataGb": 14.65,
+      "minutes": 389,
+      "sms": 87
+    },
+    {
+      "id": "USE-10",
+      "customerId": "CUST-1010",
+      "month": "2026-11",
+      "dataGb": 16.0,
+      "minutes": 420,
+      "sms": 95
+    },
+    {
+      "id": "USE-11",
+      "customerId": "CUST-1011",
+      "month": "2026-11",
+      "dataGb": 17.35,
+      "minutes": 451,
+      "sms": 103
+    },
+    {
+      "id": "USE-12",
+      "customerId": "CUST-1012",
+      "month": "2026-11",
+      "dataGb": 18.7,
+      "minutes": 482,
+      "sms": 111
+    },
+    {
+      "id": "USE-13",
+      "customerId": "CUST-1013",
+      "month": "2026-11",
+      "dataGb": 20.05,
+      "minutes": 513,
+      "sms": 119
+    },
+    {
+      "id": "USE-14",
+      "customerId": "CUST-1014",
+      "month": "2026-11",
+      "dataGb": 21.4,
+      "minutes": 544,
+      "sms": 127
+    },
+    {
+      "id": "USE-15",
+      "customerId": "CUST-1015",
+      "month": "2026-11",
+      "dataGb": 22.75,
+      "minutes": 575,
+      "sms": 135
+    },
+    {
+      "id": "USE-16",
+      "customerId": "CUST-1016",
+      "month": "2026-11",
+      "dataGb": 24.1,
+      "minutes": 606,
+      "sms": 143
+    },
+    {
+      "id": "USE-17",
+      "customerId": "CUST-1017",
+      "month": "2026-11",
+      "dataGb": 25.45,
+      "minutes": 637,
+      "sms": 151
+    },
+    {
+      "id": "USE-18",
+      "customerId": "CUST-1018",
+      "month": "2026-11",
+      "dataGb": 26.8,
+      "minutes": 668,
+      "sms": 159
+    },
+    {
+      "id": "USE-19",
+      "customerId": "CUST-1019",
+      "month": "2026-11",
+      "dataGb": 0,
+      "minutes": 0,
+      "sms": 0
+    },
+    {
+      "id": "USE-20",
+      "customerId": "CUST-1020",
+      "month": "2026-11",
+      "dataGb": 0,
+      "minutes": 0,
+      "sms": 0
+    }
+  ],
+  "tickets": [
+    {
+      "id": "TCK-501",
+      "customerId": "CUST-1001",
+      "date": "2026-11-14",
+      "subject": "Duplicate November plan charge",
+      "status": "open"
+    },
+    {
+      "id": "TCK-502",
+      "customerId": "CUST-1002",
+      "date": "2026-11-14",
+      "subject": "Repeated monthly billing",
+      "status": "open"
+    },
+    {
+      "id": "TCK-503",
+      "customerId": "CUST-1003",
+      "date": "2026-11-14",
+      "subject": "Business plan billed twice",
+      "status": "open"
+    },
+    {
+      "id": "TCK-504",
+      "customerId": "CUST-1004",
+      "date": "2026-11-14",
+      "subject": "Activation pending on suspended line",
+      "status": "open"
+    },
+    {
+      "id": "TCK-505",
+      "customerId": "CUST-1005",
+      "date": "2026-11-14",
+      "subject": "International roaming charge review",
+      "status": "open"
+    },
+    {
+      "id": "TCK-506",
+      "customerId": "CUST-1006",
+      "date": "2026-11-14",
+      "subject": "Late fee inquiry",
+      "status": "resolved"
+    },
+    {
+      "id": "TCK-507",
+      "customerId": "CUST-1007",
+      "date": "2026-11-14",
+      "subject": "Payment posting inquiry",
+      "status": "resolved"
+    },
+    {
+      "id": "TCK-508",
+      "customerId": "CUST-1008",
+      "date": "2026-11-14",
+      "subject": "Regional network outage",
+      "status": "open"
+    },
+    {
+      "id": "TCK-509",
+      "customerId": "CUST-1009",
+      "date": "2026-11-14",
+      "subject": "Plan upgrade effective date",
+      "status": "open"
+    },
+    {
+      "id": "TCK-510",
+      "customerId": "CUST-1010",
+      "date": "2026-11-14",
+      "subject": "Device activation assistance",
+      "status": "open"
+    },
+    {
+      "id": "TCK-511",
+      "customerId": "CUST-1011",
+      "date": "2026-11-14",
+      "subject": "Retention offer review",
+      "status": "open"
+    },
+    {
+      "id": "TCK-512",
+      "customerId": "CUST-1012",
+      "date": "2026-11-14",
+      "subject": "Plan downgrade pricing inquiry",
+      "status": "open"
+    }
+  ],
+  "cases": [
+    {
+      "id": "CASE-1001",
+      "customerId": "CUST-1001",
+      "type": "duplicate_charge",
+      "title": "Double charge — November plan $87.40",
+      "description": "INV-2039 on 2026-11-08 and INV-2041 on 2026-11-14 both billed $87.40 for Unlimited Premium — monthly plan.",
+      "amount": 87.4,
+      "status": "open",
+      "createdAt": "2026-11-15T09:12:00Z",
+      "idempotencyKey": "case-1001-v1"
+    },
+    {
+      "id": "CASE-1002",
+      "customerId": "CUST-1002",
+      "type": "duplicate_charge",
+      "title": "Duplicate Starter plan billing",
+      "description": "INV-3020 on 2026-11-08 and INV-2042 on 2026-11-13 both billed $65.00 for Unlimited Starter — monthly plan.",
+      "amount": 65.0,
+      "status": "open",
+      "createdAt": "2026-11-15T09:13:00Z",
+      "idempotencyKey": "case-1002-v1"
+    },
+    {
+      "id": "CASE-1003",
+      "customerId": "CUST-1003",
+      "type": "duplicate_charge",
+      "title": "Repeated Business Elite charge",
+      "description": "INV-3030 on 2026-11-08 and INV-2043 on 2026-11-12 both billed $112.00 for Business Elite — monthly plan.",
+      "amount": 112.0,
+      "status": "open",
+      "createdAt": "2026-11-15T09:14:00Z",
+      "idempotencyKey": "case-1003-v1"
+    },
+    {
+      "id": "CASE-1004",
+      "customerId": "CUST-1004",
+      "type": "provisioning",
+      "title": "Suspended line activation request",
+      "description": "INV-3040 on 2026-11-08 billed $98.00 for Family Share — monthly plan; activation requested while account is suspended, making the account ineligible.",
+      "amount": 98.0,
+      "status": "open",
+      "createdAt": "2026-11-15T09:15:00Z",
+      "idempotencyKey": "case-1004-v1"
+    },
+    {
+      "id": "CASE-1005",
+      "customerId": "CUST-1005",
+      "type": "roaming_dispute",
+      "title": "Single Canada roaming charge dispute",
+      "description": "INV-3501 on 2026-11-11 billed $42.75 for International roaming — Canada; only one roaming charge exists, so duplicate-charge validation must fail.",
+      "amount": 42.75,
+      "status": "open",
+      "createdAt": "2026-11-15T09:16:00Z",
+      "idempotencyKey": "case-1005-v1"
+    },
+    {
+      "id": "CASE-1006",
+      "customerId": "CUST-1006",
+      "type": "retention",
+      "title": "Retention credit request",
+      "description": "INV-3502 on 2026-11-11 billed $10.00 for Late payment fee; customer requests a retention review and any credit requires human approval.",
+      "amount": 10.0,
+      "status": "open",
+      "createdAt": "2026-11-15T09:17:00Z",
+      "idempotencyKey": "case-1006-v1"
+    },
+    {
+      "id": "CASE-1007",
+      "customerId": "CUST-1007",
+      "type": "outage",
+      "title": "Service interruption credit inquiry",
+      "description": "INV-3071 on 2026-11-09 billed $18.45 for Device installment; the customer requests outage credit, subject to network-confirmed duration over 4 hours.",
+      "amount": 18.45,
+      "status": "open",
+      "createdAt": "2026-11-15T09:18:00Z",
+      "idempotencyKey": "case-1007-v1"
+    },
+    {
+      "id": "CASE-1008",
+      "customerId": "CUST-1008",
+      "type": "plan_change",
+      "title": "Plan pricing review",
+      "description": "INV-3080 on 2026-11-08 billed $98.00 for Family Share — monthly plan; customer requests review of a possible plan change.",
+      "amount": 98.0,
+      "status": "open",
+      "createdAt": "2026-11-15T09:19:00Z",
+      "idempotencyKey": "case-1008-v1"
+    },
+    {
+      "id": "CASE-1009",
+      "customerId": "CUST-1009",
+      "type": "provisioning",
+      "title": "Device activation assistance",
+      "description": "INV-3091 on 2026-11-09 billed $19.15 for Device installment; an active-account eligibility check is required before device activation.",
+      "amount": 19.15,
+      "status": "open",
+      "createdAt": "2026-11-15T09:20:00Z",
+      "idempotencyKey": "case-1009-v1"
+    },
+    {
+      "id": "CASE-1010",
+      "customerId": "CUST-1010",
+      "type": "plan_change",
+      "title": "Premium plan comparison",
+      "description": "INV-3100 on 2026-11-08 billed $65.00 for Unlimited Starter — monthly plan; customer requests comparison with Unlimited Premium at $87.40, a $22.40 difference.",
+      "amount": 65.0,
+      "status": "open",
+      "createdAt": "2026-11-15T09:21:00Z",
+      "idempotencyKey": "case-1010-v1"
+    },
+    {
+      "id": "CASE-1011",
+      "customerId": "CUST-1011",
+      "type": "retention",
+      "title": "Suspended service retention review",
+      "description": "INV-3110 on 2026-11-08 billed $112.00 for Business Elite — monthly plan; customer requests a save offer and reactivation subject to human approval.",
+      "amount": 112.0,
+      "status": "open",
+      "createdAt": "2026-11-15T09:22:00Z",
+      "idempotencyKey": "case-1011-v1"
+    },
+    {
+      "id": "CASE-1012",
+      "customerId": "CUST-1012",
+      "type": "outage",
+      "title": "Reported connectivity outage",
+      "description": "INV-3121 on 2026-11-09 billed $20.20 for Device installment; customer requests an outage credit conditional on a network-confirmed interruption over 4 hours.",
+      "amount": 20.2,
+      "status": "open",
+      "createdAt": "2026-11-15T09:23:00Z",
+      "idempotencyKey": "case-1012-v1"
+    }
+  ],
+  "docs": [
+    {
+      "id": "POL-001",
+      "title": "Duplicate Billing Credit Policy",
+      "body": "A duplicate charge is the same customer, same service, and same amount posted twice within 7 days under different invoice numbers. A billing credit may be proposed only after both posted charges are verified and linked to the customer account. A single valid charge is not a duplicate.",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "POL-002",
+      "title": "Goodwill Credit Limits",
+      "body": "A goodwill credit of $25 or less does not require second approval. A goodwill credit greater than $25 requires human approval. A goodwill credit greater than $100 requires supervisor approval.",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "POL-003",
+      "title": "Roaming Charges",
+      "body": "A roaming charge is valid when usage in the billed roaming region is verified against the customer account and the roaming rate. A single verified roaming charge does not qualify as duplicate billing. Disputed roaming charges require usage verification before credit review.",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "POL-004",
+      "title": "Plan Change Processing",
+      "body": "Unlimited Starter costs $65.00 and Unlimited Premium costs $87.40, a monthly difference of $22.40. Plan changes require customer authorization and an eligibility check. An approved plan change takes effect on the next billing cycle, and the confirmation must state that effective date.",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "POL-005",
+      "title": "Case Handling Time Standard",
+      "body": "The manual case-handling baseline is 38 minutes per case. Case records must include a customer reference, supporting evidence, a decision, and an audit trail. The baseline is a comparison standard, not a guaranteed resolution time.",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "POL-006",
+      "title": "Outage Service Credit Policy",
+      "body": "An outage service credit of $25 is available only if the outage lasts more than 4 hours and is confirmed in network status. An unconfirmed outage or one lasting 4 hours or less does not qualify. Record network confirmation before issuing a credit.",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "POL-007",
+      "title": "Retention Save Offers",
+      "body": "Retention save offers may include a credit of up to $25 and reactivation. Every save offer and reactivation requires human approval. Record the customer acceptance and approval before execution.",
+      "updated": "2026-10-01"
+    },
+    {
+      "id": "POL-008",
+      "title": "Provisioning & Activation Policy",
+      "body": "Provisioning requires an active account with an overdue balance of $100 or less. The required sequence is eligibility, order, provisioning, device activation, and confirmation. Suspended and closed accounts fail eligibility until restored to active status.",
+      "updated": "2026-10-01"
+    }
+  ],
+  "stairTrees": [
+    {
+      "id": "TREE-BILLING",
+      "title": "Billing Policy",
+      "autoGenerated": false,
+      "leaves": [
+        {
+          "id": "BILL-CREDIT-DUP",
+          "title": "Duplicate Charges",
+          "path": "Billing Policy > Credits > Duplicate Charges",
+          "section": "§4.2",
+          "body": "A duplicate charge is the same customer, same service, and same amount posted twice within 7 days under different invoice numbers. A billing credit may be proposed only after both posted charges are verified and linked to the customer account. A single valid charge is not a duplicate."
+        },
+        {
+          "id": "BILL-CREDIT-GOODWILL",
+          "title": "Goodwill Credits",
+          "path": "Billing Policy > Credits > Goodwill Credits",
+          "section": "§4.3",
+          "body": "A goodwill credit of $25 or less does not require second approval. A goodwill credit greater than $25 requires human approval. A goodwill credit greater than $100 requires supervisor approval."
+        },
+        {
+          "id": "BILL-CREDIT-OUTAGE",
+          "title": "Outage Credits",
+          "path": "Billing Policy > Credits > Outage Credits",
+          "section": "§5.1",
+          "body": "An outage service credit of $25 is available only if the outage lasts more than 4 hours and is confirmed in network status. An unconfirmed outage or one lasting 4 hours or less does not qualify. Record network confirmation before issuing a credit."
+        }
+      ]
+    },
+    {
+      "id": "TREE-SERVICE",
+      "title": "Service Operations Policy",
+      "autoGenerated": false,
+      "leaves": [
+        {
+          "id": "SVC-PROV-NEWLINE",
+          "title": "New Line Activation",
+          "path": "Service Operations Policy > Provisioning > New Line Activation",
+          "section": "§2.1",
+          "body": "Provisioning requires an active account with an overdue balance of $100 or less. The required sequence is eligibility, order, provisioning, device activation, and confirmation. Suspended and closed accounts fail eligibility until restored to active status."
+        },
+        {
+          "id": "SVC-PROV-DEVICE",
+          "title": "Device Activation",
+          "path": "Service Operations Policy > Provisioning > Device Activation",
+          "section": "§2.2",
+          "body": "Provisioning requires an active account with an overdue balance of $100 or less. The required sequence is eligibility, order, provisioning, device activation, and confirmation. Suspended and closed accounts fail eligibility until restored to active status."
+        },
+        {
+          "id": "SVC-NET-OUTAGE",
+          "title": "Outage Triage",
+          "path": "Service Operations Policy > Network > Outage Triage",
+          "section": "§6.1",
+          "body": "An outage service credit of $25 is available only if the outage lasts more than 4 hours and is confirmed in network status. An unconfirmed outage or one lasting 4 hours or less does not qualify. Record network confirmation before issuing a credit."
+        },
+        {
+          "id": "SVC-NET-TECH",
+          "title": "Technician Scheduling",
+          "path": "Service Operations Policy > Network > Technician Scheduling",
+          "section": "§6.2",
+          "body": "Technician scheduling requires a recorded customer report and a verified network or device issue. Confirm the affected service and customer availability before booking a technician. Record the appointment and customer confirmation in the case audit trail."
+        }
+      ]
+    },
+    {
+      "id": "TREE-CUSTOMER",
+      "title": "Plan and Retention Policy",
+      "autoGenerated": false,
+      "leaves": [
+        {
+          "id": "PLAN-UPGRADE-PRICE",
+          "title": "Upgrade Pricing",
+          "path": "Plan and Retention Policy > Plans > Upgrade Pricing",
+          "section": "§7.1",
+          "body": "Unlimited Starter costs $65.00 and Unlimited Premium costs $87.40, a monthly difference of $22.40. Plan changes require customer authorization and an eligibility check. An approved plan change takes effect on the next billing cycle, and the confirmation must state that effective date."
+        },
+        {
+          "id": "PLAN-CHANGE-EFFECTIVE",
+          "title": "Plan Change Effective Date",
+          "path": "Plan and Retention Policy > Plans > Plan Change Effective Date",
+          "section": "§7.2",
+          "body": "Unlimited Starter costs $65.00 and Unlimited Premium costs $87.40, a monthly difference of $22.40. Plan changes require customer authorization and an eligibility check. An approved plan change takes effect on the next billing cycle, and the confirmation must state that effective date."
+        },
+        {
+          "id": "RET-SAVE-OFFER",
+          "title": "Save Offers",
+          "path": "Plan and Retention Policy > Retention > Save Offers",
+          "section": "§8.1",
+          "body": "Retention save offers may include a credit of up to $25 and reactivation. Every save offer and reactivation requires human approval. Record the customer acceptance and approval before execution."
+        },
+        {
+          "id": "RET-CHURN-SIGNAL",
+          "title": "Churn Signals",
+          "path": "Plan and Retention Policy > Retention > Churn Signals",
+          "section": "§8.2",
+          "body": "A customer request to cancel service or review a competing plan is a churn signal. Record the signal and review eligibility before proposing a retention save offer. Every save offer and reactivation requires human approval."
+        }
+      ]
+    }
+  ]
+}

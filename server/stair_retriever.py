@@ -1,0 +1,148 @@
+"""STAIR — STructure Aware Information Retriever (IBM Research, Kumar et al.,
+arXiv 2609.03874), Python implementation mirroring src/lib/stair.ts.
+
+No chunking, no embeddings, no vector database. Knowledge is stored as
+structured trees (Table of Contents -> sections -> leaf nodes). Retrieval is
+given the full TOC and navigates to the exact leaf; the answer comes only
+from that leaf, retrieved intact, cited by its full section path.
+
+Constrained selection: the retriever may only return a leaf title that
+exists in the TOC. Valid titles are held in a trie; a candidate title is
+accepted only if the trie contains it exactly, so the retriever cannot
+invent a section.
+
+Honest numbers: in the paper, hallucination < 0.05% means generating an
+invalid section identifier, not general factual accuracy. Recall@1 on
+SearchTome: STAIR 82.6%, DSI 76.9%, DPR 68.7%, BM25 59.5%. No "65x
+reduction" figure is claimed anywhere in this project.
+"""
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+STOPWORDS = set(
+    "a an the is are was were what how why when where which who whom this that "
+    "these those it its of for to in on at by with from as and or not no do does "
+    "did can could should would i me my we you your he she they them his her "
+    "their our".split()
+)
+
+EVAL_SET = [
+    {"query": "duplicate charge credit policy", "expectedLeafId": "BILL-CREDIT-DUP", "expectedDocId": "POL-001"},
+    {"query": "charged twice same amount", "expectedLeafId": "BILL-CREDIT-DUP", "expectedDocId": "POL-001"},
+    {"query": "goodwill credit limit approval", "expectedLeafId": "BILL-CREDIT-GOODWILL", "expectedDocId": "POL-002"},
+    {"query": "outage service credit", "expectedLeafId": "BILL-CREDIT-OUTAGE", "expectedDocId": "POL-006"},
+    {"query": "new line activation provisioning", "expectedLeafId": "SVC-PROV-NEWLINE", "expectedDocId": "POL-008"},
+    {"query": "device activation steps", "expectedLeafId": "SVC-PROV-DEVICE", "expectedDocId": "POL-008"},
+    {"query": "network outage triage diagnose", "expectedLeafId": "SVC-NET-OUTAGE", "expectedDocId": "POL-008"},
+    {"query": "schedule technician visit", "expectedLeafId": "SVC-NET-TECH", "expectedDocId": "POL-008"},
+    {"query": "plan upgrade price premium starter", "expectedLeafId": "PLAN-UPGRADE-PRICE", "expectedDocId": "POL-004"},
+    {"query": "retention save offer churn", "expectedLeafId": "RET-SAVE-OFFER", "expectedDocId": "POL-007"},
+]
+
+
+def tokenize(text: str) -> list[str]:
+    # Light stemming so "credits" matches "credit" and "charges" matches "charge".
+    words = re.sub(r"[^a-z0-9\s]", " ", text.lower()).split()
+    out = [w for w in words if len(w) > 2 and w not in STOPWORDS]
+    return [w[:-1] if len(w) > 3 and w.endswith("s") else w for w in out]
+
+
+class TitleTrie:
+    """A trie over valid leaf titles. Only an exact title in the trie is a
+    valid retrieval result — anything else is rejected as an invalid section."""
+
+    def __init__(self, titles):
+        self.root: dict = {}
+        for title in titles:
+            node = self.root
+            for ch in title:
+                node = node.setdefault(ch, {})
+            node["$"] = True
+
+    def contains(self, title: str) -> bool:
+        node = self.root
+        for ch in title:
+            node = node.get(ch)
+            if node is None:
+                return False
+        return "$" in node
+
+
+def valid_titles(trees: list[dict]) -> set[str]:
+    return {leaf["title"] for tree in trees for leaf in tree["leaves"]}
+
+
+def all_leaves(trees: list[dict]) -> list[dict]:
+    return [leaf for tree in trees for leaf in tree["leaves"]]
+
+
+def retrieve(trees: list[dict], query: str) -> dict | None:
+    """Navigate the full TOC to the best-matching leaf. Returns the leaf
+    intact (full body), or None when nothing matches."""
+    q = list(dict.fromkeys(tokenize(query)))
+    if not q:
+        return None
+    trie = TitleTrie(valid_titles(trees))
+    best = None
+    for leaf in all_leaves(trees):
+        if not trie.contains(leaf["title"]):  # constrained selection
+            continue
+        hay = tokenize(f"{leaf['path']} {leaf['title']} {leaf['section']}")
+        matched = [t for t in q if t in hay]
+        score = len(matched) / len(q)
+        if score >= 0.2 and (best is None or score > best["score"]):
+            best = {"leaf": leaf, "score": round(score, 2), "matched": matched}
+    return best
+
+
+def answer(trees: list[dict], query: str) -> dict:
+    hit = retrieve(trees, query)
+    if hit is None:
+        return {"answer": "Not found in policy — no section in the Table of "
+                          "Contents matches this question, so I will not guess.",
+                "leaf": None, "score": 0, "refused": True}
+    leaf = hit["leaf"]
+    return {"answer": leaf["body"], "leaf": leaf, "score": hit["score"], "refused": False}
+
+
+def auto_toc_from_doc(doc: dict) -> dict:
+    """Auto-generate a TOC for a plain doc with no headings. Flagged
+    autoGenerated; one section per sentence."""
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", doc["body"]) if s.strip()]
+    leaves = [
+        {"id": f"{doc['id']}-AUTO-{i + 1}",
+         "title": f"{doc['title']} — auto section {i + 1}",
+         "path": f"{doc['title']} > Auto-generated > Section {i + 1}",
+         "section": f"§A.{i + 1}", "body": s}
+        for i, s in enumerate(sentences)
+    ]
+    return {"id": doc["id"], "title": doc["title"], "autoGenerated": True, "leaves": leaves}
+
+
+def measure_eval(trees: list[dict]) -> dict:
+    trie = TitleTrie(valid_titles(trees))
+    per_query = []
+    for item in EVAL_SET:
+        hit = retrieve(trees, item["query"])
+        got = hit["leaf"]["id"] if hit else None
+        per_query.append({"query": item["query"], "expected": item["expectedLeafId"],
+                          "got": got, "correct": got == item["expectedLeafId"]})
+    correct = sum(1 for p in per_query if p["correct"])
+    leaves_by_id = {leaf["id"]: leaf for leaf in all_leaves(trees)}
+    invalid = sum(1 for p in per_query
+                  if p["got"] is not None and not trie.contains(leaves_by_id[p["got"]]["title"]))
+    return {"total": len(per_query), "correct": correct,
+            "recallAt1": round(correct / len(per_query) * 100, 1),
+            "invalidSections": invalid,
+            "invalidRate": round(invalid / len(per_query) * 100, 1),
+            "perQuery": per_query}
+
+
+def load_trees() -> list[dict]:
+    seed = Path(__file__).with_name("seed.json")
+    if seed.exists():
+        return json.loads(seed.read_text()).get("stairTrees", [])
+    return []

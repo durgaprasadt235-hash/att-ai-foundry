@@ -1,0 +1,177 @@
+// Synthetic seed data — clearly labelled in the UI as synthetic demo data.
+// Names, accounts, phones and invoices are invented for this demo.
+import type { AppState } from './types';
+
+export function seedState(): AppState {
+  return {
+    seededAt: new Date().toISOString(),
+    customers: [
+      { id: 'CUST-1001', name: 'Maya Rodriguez', account: 'ACC-884120', phone: '(201) 555-0142', email: 'maya.r.demo@example.com', plan: 'Unlimited Premium', status: 'active', since: '2021-03-14', balance: 174.8, city: 'Jersey City, NJ' },
+      { id: 'CUST-1002', name: 'James Okafor', account: 'ACC-884121', phone: '(973) 555-0187', email: 'james.o.demo@example.com', plan: 'Unlimited Starter', status: 'active', since: '2022-07-02', balance: 65.0, city: 'Newark, NJ' },
+      { id: 'CUST-1003', name: 'Priya Nair', account: 'ACC-884122', phone: '(908) 555-0119', email: 'priya.n.demo@example.com', plan: 'Unlimited Premium', status: 'active', since: '2020-11-25', balance: 0, city: 'Edison, NJ' },
+      { id: 'CUST-1004', name: 'Daniel Kim', account: 'ACC-884123', phone: '(732) 555-0163', email: 'daniel.k.demo@example.com', plan: 'Business Elite', status: 'active', since: '2019-05-30', balance: 412.6, city: 'Princeton, NJ' },
+      { id: 'CUST-1005', name: 'Sofia Almeida', account: 'ACC-884124', phone: '(201) 555-0198', email: 'sofia.a.demo@example.com', plan: 'Unlimited Starter', status: 'suspended', since: '2023-01-17', balance: 129.99, city: 'Hoboken, NJ' },
+      { id: 'CUST-1006', name: 'Robert Chen', account: 'ACC-884125', phone: '(609) 555-0124', email: 'robert.c.demo@example.com', plan: 'Unlimited Premium', status: 'active', since: '2021-09-08', balance: 87.4, city: 'Trenton, NJ' },
+      { id: 'CUST-1007', name: 'Aisha Bello', account: 'ACC-884126', phone: '(862) 555-0171', email: 'aisha.b.demo@example.com', plan: 'Family Share', status: 'active', since: '2022-02-11', balance: 210.0, city: 'Paterson, NJ' },
+      { id: 'CUST-1008', name: 'Thomas Walsh', account: 'ACC-884127', phone: '(856) 555-0155', email: 'thomas.w.demo@example.com', plan: 'Unlimited Starter', status: 'closed', since: '2018-08-19', balance: 0, city: 'Cherry Hill, NJ' },
+    ],
+    ledger: [
+      { id: 'LED-01', customerId: 'CUST-1001', invoice: 'INV-2039', date: '2026-11-08', service: 'Unlimited Premium — monthly plan', amount: 87.4, kind: 'charge', status: 'posted' },
+      { id: 'LED-02', customerId: 'CUST-1001', invoice: 'INV-2041', date: '2026-11-14', service: 'Unlimited Premium — monthly plan', amount: 87.4, kind: 'charge', status: 'posted' },
+      { id: 'LED-03', customerId: 'CUST-1001', invoice: 'INV-2039', date: '2026-11-08', service: 'Payment received', amount: -87.4, kind: 'payment', status: 'posted' },
+      { id: 'LED-04', customerId: 'CUST-1002', invoice: 'INV-2102', date: '2026-11-10', service: 'Unlimited Starter — monthly plan', amount: 65.0, kind: 'charge', status: 'posted' },
+      { id: 'LED-05', customerId: 'CUST-1003', invoice: 'INV-2110', date: '2026-11-11', service: 'Unlimited Premium — monthly plan', amount: 87.4, kind: 'charge', status: 'posted' },
+      { id: 'LED-06', customerId: 'CUST-1004', invoice: 'INV-2150', date: '2026-11-09', service: 'Business Elite — monthly plan', amount: 206.3, kind: 'charge', status: 'posted' },
+      { id: 'LED-07', customerId: 'CUST-1004', invoice: 'INV-2151', date: '2026-11-09', service: 'Business Elite — additional line', amount: 206.3, kind: 'charge', status: 'posted' },
+      { id: 'LED-08', customerId: 'CUST-1005', invoice: 'INV-2201', date: '2026-11-12', service: 'Unlimited Starter — monthly plan', amount: 65.0, kind: 'charge', status: 'posted' },
+      { id: 'LED-09', customerId: 'CUST-1005', invoice: 'INV-2202', date: '2026-11-12', service: 'Late fee', amount: 64.99, kind: 'charge', status: 'posted' },
+      { id: 'LED-10', customerId: 'CUST-1006', invoice: 'INV-2210', date: '2026-11-13', service: 'Unlimited Premium — monthly plan', amount: 87.4, kind: 'charge', status: 'posted' },
+      { id: 'LED-11', customerId: 'CUST-1007', invoice: 'INV-2230', date: '2026-11-10', service: 'Family Share — monthly plan', amount: 210.0, kind: 'charge', status: 'posted' },
+      { id: 'LED-12', customerId: 'CUST-1007', invoice: 'INV-2231', date: '2026-11-15', service: 'Roaming — Canada, 3 days', amount: 12.99, kind: 'charge', status: 'posted' },
+      { id: 'LED-13', customerId: 'CUST-1002', invoice: 'INV-2103', date: '2026-10-10', service: 'Unlimited Starter — monthly plan', amount: 65.0, kind: 'charge', status: 'posted' },
+      { id: 'LED-14', customerId: 'CUST-1001', invoice: 'INV-2001', date: '2026-10-08', service: 'Unlimited Premium — monthly plan', amount: 87.4, kind: 'charge', status: 'posted' },
+    ],
+    usage: [
+      { id: 'USE-01', customerId: 'CUST-1001', month: '2026-11', dataGb: 42.1, minutes: 612, sms: 188 },
+      { id: 'USE-02', customerId: 'CUST-1002', month: '2026-11', dataGb: 18.4, minutes: 301, sms: 96 },
+      { id: 'USE-03', customerId: 'CUST-1003', month: '2026-11', dataGb: 55.7, minutes: 720, sms: 240 },
+      { id: 'USE-04', customerId: 'CUST-1004', month: '2026-11', dataGb: 128.9, minutes: 1840, sms: 410 },
+      { id: 'USE-05', customerId: 'CUST-1005', month: '2026-11', dataGb: 9.2, minutes: 88, sms: 12 },
+      { id: 'USE-06', customerId: 'CUST-1006', month: '2026-11', dataGb: 31.0, minutes: 455, sms: 130 },
+      { id: 'USE-07', customerId: 'CUST-1007', month: '2026-11', dataGb: 64.3, minutes: 902, sms: 301 },
+      { id: 'USE-08', customerId: 'CUST-1008', month: '2026-10', dataGb: 0, minutes: 0, sms: 0 },
+    ],
+    tickets: [
+      { id: 'TCK-501', customerId: 'CUST-1001', date: '2026-11-14', subject: 'Charged twice for November plan', status: 'open' },
+      { id: 'TCK-502', customerId: 'CUST-1004', date: '2026-10-02', subject: 'Invoice explanation request', status: 'resolved' },
+      { id: 'TCK-503', customerId: 'CUST-1007', date: '2026-11-15', subject: 'Roaming charge question', status: 'open' },
+    ],
+    cases: [
+      {
+        id: 'CASE-1001', customerId: 'CUST-1001', type: 'duplicate_charge',
+        title: 'Double charge — November plan $87.40',
+        description: 'Customer reports being charged twice for the November Unlimited Premium plan: INV-2039 on 2026-11-08 and INV-2041 on 2026-11-14, both $87.40.',
+        amount: 87.4, status: 'open', createdAt: '2026-11-15T09:12:00Z', idempotencyKey: 'case-1001-v1',
+      },
+      {
+        id: 'CASE-1002', customerId: 'CUST-1002', type: 'plan_change',
+        title: 'Plan change not applied',
+        description: 'Customer asked to move from Unlimited Starter to Unlimited Premium on 2026-11-12; the plan on the account still shows Starter.',
+        amount: 0, status: 'open', createdAt: '2026-11-16T10:04:00Z', idempotencyKey: 'case-1002-v1',
+      },
+      {
+        id: 'CASE-1003', customerId: 'CUST-1007', type: 'roaming_dispute',
+        title: 'Roaming charge dispute — $12.99',
+        description: 'Customer disputes a $12.99 Canada roaming charge, saying roaming was off. Single charge, no duplicate in the ledger.',
+        amount: 12.99, status: 'open', createdAt: '2026-11-17T08:41:00Z', idempotencyKey: 'case-1003-v1',
+      },
+      {
+        id: 'CASE-1004', customerId: 'CUST-1002', type: 'provisioning',
+        title: 'New line activation — second line for James Okafor',
+        description: 'Customer wants a second line on the same account with a new device. Eligibility, order, provisioning and activation must all complete.',
+        amount: 0, status: 'open', createdAt: '2026-11-18T09:30:00Z', idempotencyKey: 'case-1004-v1',
+      },
+      {
+        id: 'CASE-1005', customerId: 'CUST-1003', type: 'outage',
+        title: 'Network outage — Edison area, no service since 07:00',
+        description: 'Customer reports no service since 07:00 today. Diagnose from network status, notify the customer, schedule a technician, and apply an outage service credit if policy allows.',
+        amount: 25, status: 'open', createdAt: '2026-11-18T11:05:00Z', idempotencyKey: 'case-1005-v1',
+      },
+      {
+        id: 'CASE-1006', customerId: 'CUST-1002', type: 'plan_change',
+        title: 'Plan upgrade — Starter to Premium',
+        description: 'Customer wants to upgrade from Unlimited Starter ($65.00) to Unlimited Premium ($87.40). Price comparison, policy grounding, customer confirmation, then apply the change with the pro-rated difference.',
+        amount: 22.4, status: 'open', createdAt: '2026-11-18T13:20:00Z', idempotencyKey: 'case-1006-v1',
+      },
+      {
+        id: 'CASE-1007', customerId: 'CUST-1005', type: 'retention',
+        title: 'Retention — save offer for suspended account',
+        description: 'Churn-risk signal: account suspended with an outstanding balance. Offer the eligible save offer (goodwill credit and reactivation) and apply it only after human approval.',
+        amount: 25, status: 'open', createdAt: '2026-11-19T08:15:00Z', idempotencyKey: 'case-1007-v1',
+      },
+    ],
+    runs: [],
+    orders: [],
+    docs: [
+      {
+        id: 'POL-001', title: 'Duplicate Billing Credit Policy',
+        body: 'If the same customer is charged twice for the same service, same amount, within 7 days, with different invoice numbers, the second charge is a duplicate. Issue a credit for the full amount of the duplicate charge. The credit must be approved by a human reviewer before it is posted. Do not credit the original charge. Record the credit against the duplicate invoice number.',
+        updated: '2026-10-01',
+      },
+      {
+        id: 'POL-002', title: 'Goodwill Credit Limits',
+        body: 'A goodwill credit of up to $25 may be issued without a second approval. Any credit above $25 requires human approval. Credits above $100 require a supervisor approval in addition to human approval. Goodwill credits are not issued for charges that are valid and correctly billed.',
+        updated: '2026-09-15',
+      },
+      {
+        id: 'POL-003', title: 'Roaming Charges — Customer Notice',
+        body: 'Roaming charges apply when a device connects to a partner network outside the home coverage area. A roaming charge is valid if usage records show a roaming session on the charged date. If no roaming session exists, the charge is invalid and a credit for the full amount is issued after human approval.',
+        updated: '2026-08-20',
+      },
+      {
+        id: 'POL-004', title: 'Plan Change Processing',
+        body: 'A requested plan change takes effect at the start of the next billing cycle unless the customer requests immediate effect and pays the pro-rated difference. If a plan change was requested and confirmed but not applied, the case is escalated to provisioning. No credit is issued for a plan change delay unless the customer was charged for a plan they did not receive.',
+        updated: '2026-10-22',
+      },
+      {
+        id: 'POL-005', title: 'Case Handling Time Standard',
+        body: 'The manual handling time standard for a billing dispute is 38 minutes per case, measured from intake to resolution. The target for agent-assisted handling is under 5 minutes of agent active time plus human review. Every case must record its measured handling time; estimates are not reported as measured time.',
+        updated: '2026-11-01',
+      },
+      {
+        id: 'POL-006', title: 'Outage Service Credit Policy',
+        body: 'If a confirmed network outage affects a customer for more than 4 hours, a service credit of $25 is issued. The outage must be confirmed against network status records, not only the customer report. The credit requires human approval. A technician visit is scheduled if service is not restored within 24 hours.',
+        updated: '2026-10-18',
+      },
+      {
+        id: 'POL-007', title: 'Retention Save Offers',
+        body: 'A churn-risk customer on a suspended or at-risk account may be offered a save offer: a goodwill credit of up to $25 and reactivation of the account. The offer requires human approval. The credit is issued only after approval, and the account is reactivated at the same time. Do not offer a save offer to a customer with an open fraud investigation.',
+        updated: '2026-10-28',
+      },
+      {
+        id: 'POL-008', title: 'Provisioning & Activation Policy',
+        body: 'A new line may be activated only for an account in active status with no overdue balance above $100. Provisioning steps are: eligibility check, order creation, network provisioning, device activation, and customer confirmation. If any step fails, the order stays in its last good state and the case is escalated — a failed activation is never reported as complete.',
+        updated: '2026-09-30',
+      },
+    ],
+    stairTrees: [
+      {
+        id: 'TREE-BILLING', title: 'Billing Policy', autoGenerated: false,
+        leaves: [
+          { id: 'BILL-CREDIT-DUP', title: 'Duplicate Charges', path: 'Billing Policy > Credits > Duplicate Charges', section: '§4.2', body: 'If the same customer is charged twice for the same service, same amount, within 7 days, with different invoice numbers, the second charge is a duplicate. Issue a credit for the full amount of the duplicate charge. The credit must be approved by a human reviewer before it is posted. Do not credit the original charge. Record the credit against the duplicate invoice number.' },
+          { id: 'BILL-CREDIT-GOODWILL', title: 'Goodwill Credits', path: 'Billing Policy > Credits > Goodwill Credits', section: '§4.3', body: 'A goodwill credit of up to $25 may be issued without a second approval. Any credit above $25 requires human approval. Credits above $100 require a supervisor approval in addition to human approval. Goodwill credits are not issued for charges that are valid and correctly billed.' },
+          { id: 'BILL-CREDIT-OUTAGE', title: 'Outage Credits', path: 'Billing Policy > Credits > Outage Credits', section: '§5.1', body: 'If a confirmed network outage affects a customer for more than 4 hours, a service credit of $25 is issued. The outage must be confirmed against network status records, not only the customer report. The credit requires human approval. A technician visit is scheduled if service is not restored within 24 hours.' },
+        ],
+      },
+      {
+        id: 'TREE-SERVICE', title: 'Service Provisioning & Network', autoGenerated: false,
+        leaves: [
+          { id: 'SVC-PROV-NEWLINE', title: 'New Line Activation', path: 'Service Policy > Provisioning > New Line Activation', section: '§2.1', body: 'A new line may be activated only for an account in active status with no overdue balance above $100. Provisioning steps are: eligibility check, order creation, network provisioning, device activation, and customer confirmation. If any step fails, the order stays in its last good state and the case is escalated — a failed activation is never reported as complete.' },
+          { id: 'SVC-PROV-DEVICE', title: 'Device Activation', path: 'Service Policy > Provisioning > Device Activation', section: '§2.2', body: 'Device activation follows network provisioning. The device is activated on the new line, the SIM is registered to the account, and the customer receives a confirmation message. If device activation fails, the order stays in provisioning and the case is escalated.' },
+          { id: 'SVC-NET-OUTAGE', title: 'Outage Triage', path: 'Service Policy > Network > Outage Triage', section: '§6.1', body: 'Outage triage starts with network status records for the customer area. If an outage is confirmed, the customer is notified with the expected restoration time. If no outage is found in network status, the case is escalated to a line check instead of applying an outage credit.' },
+          { id: 'SVC-NET-TECH', title: 'Technician Scheduling', path: 'Service Policy > Network > Technician Scheduling', section: '§6.2', body: 'A technician visit is scheduled if service is not restored within 24 hours of a confirmed outage. The visit is booked for the next available slot, the customer is notified, and the ticket stays open until the visit is completed.' },
+        ],
+      },
+      {
+        id: 'TREE-PLANS', title: 'Plans & Retention', autoGenerated: false,
+        leaves: [
+          { id: 'PLAN-UPGRADE-PRICE', title: 'Upgrade Pricing', path: 'Plans Policy > Plan Changes > Upgrade Pricing', section: '§7.1', body: 'Unlimited Starter is $65.00 per month and Unlimited Premium is $87.40 per month. An upgrade from Starter to Premium costs the pro-rated difference of $22.40 for the remainder of the billing cycle. The customer must confirm the new price before the change is applied.' },
+          { id: 'PLAN-CHANGE-EFFECTIVE', title: 'Plan Change Effective Date', path: 'Plans Policy > Plan Changes > Effective Date', section: '§7.2', body: 'A requested plan change takes effect at the start of the next billing cycle unless the customer requests immediate effect and pays the pro-rated difference. If a plan change was requested and confirmed but not applied, the case is escalated to provisioning. No credit is issued for a plan change delay unless the customer was charged for a plan they did not receive.' },
+          { id: 'RET-SAVE-OFFER', title: 'Save Offers', path: 'Retention Policy > Retention > Save Offers', section: '§8.1', body: 'A churn-risk customer on a suspended or at-risk account may be offered a save offer: a goodwill credit of up to $25 and reactivation of the account. The offer requires human approval. The credit is issued only after approval, and the account is reactivated at the same time.' },
+          { id: 'RET-CHURN-SIGNAL', title: 'Churn Signals', path: 'Retention Policy > Retention > Churn Signals', section: '§8.2', body: 'Churn-risk signals are a suspended account, an outstanding balance, and a recent service complaint. A customer with two or more signals is flagged as churn-risk and is eligible for a save offer review.' },
+        ],
+      },
+    ],
+    pipelines: [
+      { id: 'PIPE-01', name: 'Customer 360 ingest', source: 'CRM + billing + usage (synthetic sources)', destination: 'customer_360' },
+      { id: 'PIPE-02', name: 'Billing ledger reconcile', source: 'billing ledger (synthetic)', destination: 'ledger_reconciled' },
+      { id: 'PIPE-03', name: 'Usage daily rollup', source: 'usage events (synthetic)', destination: 'usage_rollup' },
+    ],
+    pipelineRuns: [],
+    evalRuns: [],
+    audit: [
+      { id: 'AUD-0001', at: new Date().toISOString(), actor: 'system', action: 'seed', detail: 'Seeded 8 synthetic customers, 14 ledger entries, 7 open cases, 8 policy docs, 3 STAIR knowledge trees (11 leaves).' },
+    ],
+    notifications: [],
+  };
+}
