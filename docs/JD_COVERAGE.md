@@ -21,7 +21,7 @@ panel (which computes its rows from `/api/health` and live state).
 
 | JD line | Implemented in | How to verify | Status |
 |---|---|---|---|
-| 5 journeys: plan → Customer 360 → STAIR grounding → validate → propose → human approval → execute → verify | `src/lib/engine.ts:planRun`, `server/engine.py:plan_run`, `src/App.tsx:runAgent/approveRun/finishRun` | Run CASE-1001 in the UI; read the run trace; `pytest server/test_engine.py` | done |
+| 5 journeys: plan → Customer 360 → STAIR grounding → validate → propose → human approval → execute → verify | `src/lib/engine.ts:planRun`, `server/engine.py:plan_run`, `src/App.tsx:runAgent/approveRun/finishRun` | Create a case on the Dashboard and read the run trace; `pytest server/test_engine.py` | done |
 | Agent state machine EXPLICIT, named states + transitions | `src/lib/agent.ts`, `server/agent.py` (`INTAKE → RETRIEVE_360 → GROUND → VALIDATE → PROPOSE → AWAITING_APPROVAL → EXECUTE → VERIFY → DONE`, `FAILED`/`REJECTED` terminal) | `pytest server/test_agent.py` (legal traces, illegal jumps reported); run a case and read the "State machine:" line in the run view; `agentStateTrace` in the plan response | done |
 | State trace shown in the UI run view | `src/App.tsx` CasesView ("State machine: … valid/invalid" + trace id) | Cases tab → run a case → run trace panel | done |
 
@@ -98,7 +98,7 @@ panel (which computes its rows from `/api/health` and live state).
 | Timeouts | Groq 20s, AT&T adapter 10s, deterministic tools 5s (tool contracts) | `GET /tools`; read the contracts | done |
 | Circuit breaker | `src/lib/groq.ts`, `server/groq_client.py`: opens after 3 consecutive failures, 60s cooldown, half-open trial; reported as `llm_circuit` in `/health` | `pytest server/test_groq.py::test_circuit_breaker_opens_after_three_failures`, `test_circuit_breaker_half_open_trial_success_closes_it`; node check of the TS breaker | done |
 | Backpressure (bounded batch sizes) | `MEDALLION_BATCH_LIMIT = 1000` (`src/lib/medallion.ts`, `server/medallion.py`); deferred records reported, never dropped | `pytest server/test_medallion.py::test_incremental_batch_is_bounded_and_defers_the_rest`; Medallion tab batch panel | done |
-| Graceful degradation (deterministic fallback everywhere, UI says which mode) | Deterministic engine is the default and the fallback; every run trace + the header say which mode was used | Run CASE-1001 with no key → trace says "deterministic fallback" / "off"; run with a key → "groq" | done |
+| Graceful degradation (deterministic fallback everywhere, UI says which mode) | Deterministic engine is the default and the fallback; every run trace + the header say which mode was used | Create a case with no key → trace says "deterministic fallback" / "off"; run with a key → "groq" | done |
 
 ## 11. Event-driven
 

@@ -39,8 +39,11 @@ curl -s $BASE/api/health | python3 -m json.tool
 # llm_configured false (until the key is set), llm_live false,
 # llm_circuit "closed", auth.enabled false, realAttSystems false.
 
-# 2. CASE-1001 plan — POST the seeded state (or run it in the UI).
-#    In the UI: Dashboard → Run demo case → approve → $87.40 credit posts.
+# 2. CASE-1001 plan — POST the seeded state (or create a case in the UI).
+#    In the UI: Dashboard → Create a case → Create case & run agent →
+#    approve → $87.40 credit posts. (CASE-1001 is one of the seeded
+#    caseload records, not a demo button — the intake flow creates a fresh
+#    case every time.)
 #    Via API: POST /api/run-case with { case: <CASE-1001>, customers, ledger,
 #    usage, tickets, docs, stairTrees } from the seed. Expect
 #    status "awaiting_approval", proposedCredit 87.4, runId + traceId +

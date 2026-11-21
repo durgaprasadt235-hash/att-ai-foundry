@@ -84,10 +84,12 @@ hours, and the trace names both the case amount and the policy credit
 (CASE-1007: the $18.45 case amount is the reported device installment; the
 credit is $25.00).
 
-**Run it in under 2 minutes:** open the app → Dashboard → **Run demo case**
-(CASE-1001) → approve the $87.40 credit → watch the balance change, the
-notification appear, and the ROI numbers move. Then run any of the other
-four cases from the Cases view.
+**Run it in under 2 minutes:** open the app → Dashboard → **Create a case**
+(pick a customer, a journey, an amount, and what happened) → **Create case &
+run agent** → approve the proposed credit → watch the balance change, the
+notification appear, and the ROI numbers move. Every case is a real record
+you just created — there is no canned demo case. The 12 seeded cases in the
+Cases view are the existing caseload, each runnable from its own row.
 
 ## Medallion architecture — Bronze → Silver → Gold (one operator)
 
@@ -451,8 +453,10 @@ tool in the loop, not a substitute for the loop.
   the “agent” is deterministic code, not a model.
 - Manual baseline (38 min, $28.50/case) and agent cost ($0.85/run) are
   stated assumptions from POL-005 / the footer, not measured cloud bills.
-- One-click demo case: CASE-1001 is pre-seeded and ready; the other cases
-  are one click each from the Cases view.
+- No canned demo case — create a case and run it: the Dashboard intake form
+  creates a real case record (new id, unique idempotency key, created now)
+  and runs the agent on it. The 12 seeded cases are the existing caseload,
+  each runnable from its own row in the Cases view.
 - Medallion petabyte scale is architectural, not measured: the demo seed
   is 106 records (20 customers, 66 ledger, 20 usage). Partitioning,
   watermarks and idempotency-key dedup are designed for petabyte volume,

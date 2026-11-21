@@ -10,6 +10,7 @@ import { stateTraceForRun } from './lib/agent';
 import { newAppEvent } from './lib/events';
 import type { AppEvent } from './lib/events';
 import { redactPII } from './lib/redact';
+import CreateCaseForm from './components/CreateCaseForm';
 
 /** Shape of GET /api/health (mirrors api/health.ts + server/app.py). The
  *  frontend reads config/datasource/LLM/auth status from here — the
@@ -141,6 +142,24 @@ export default function App() {
     audit('agent', 'awaiting_approval', `${runId} for ${caseId} proposes a credit of ${money(plan.proposedCredit ?? 0)} and is paused for human approval.`, { runId, durationMs: Math.round(performance.now() - t0), traceId });
     emit(newAppEvent(plan.proposedCredit !== null ? 'credit_proposed' : 'plan_proposed', 'agent', `${runId} for ${caseId} proposes ${plan.proposedAction ?? `a credit of ${money(plan.proposedCredit ?? 0)}`} and is paused for human approval.`, { runId, traceId }));
     setNotice(`Agent paused for approval: proposed credit ${money(plan.proposedCredit ?? 0)} for ${caseId}. Approve or reject below.`);
+  };
+
+  // ---------- Case intake: create a REAL new case, then run the agent on it ----------
+  // There is no canned case anywhere in this flow. The case arrives with a
+  // fresh id + idempotency key (built in src/lib/case-intake.ts), is added
+  // to state (persisted to localStorage like every other record), and the
+  // agent runs on it. The run lands in the Cases view with its trace and
+  // approval step — coming back later shows this run history, not a reset.
+  const createCaseAndRun = async (c: Case, newCustomer?: Customer) => {
+    mutate((s) => ({
+      ...s,
+      customers: newCustomer ? [...s.customers, newCustomer] : s.customers,
+      cases: [...s.cases, c],
+    }));
+    audit('human', 'case_created', `Created case ${c.id} for ${c.customerId} (${c.type}, ${money(c.amount)}).`);
+    emit(newAppEvent('case_created', 'human', `Created case ${c.id} for ${c.customerId} (${c.type}, ${money(c.amount)}).`));
+    setView('cases');
+    await runAgent(c.id);
   };
 
   const approveRun = async (runId: string) => {
@@ -276,8 +295,6 @@ export default function App() {
     setNotice('Rejected: no credit issued, no ledger change. The case can be re-run after review.');
   };
 
-  const runDemoCase = () => { setView('cases'); void runAgent('CASE-1001'); };
-
   const dash = useMemo(() => dashboard(state), [state]);
   const medianMin = dash.medianAgentMs === null ? null : dash.medianAgentMs / 60000;
   const costSaved = dash.casesResolved * (MANUAL_COST_USD - AGENT_COST_USD);
@@ -293,7 +310,7 @@ export default function App() {
     if (!auth.configured) {
       return (
         <div>
-          <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform — director demo</span></div></div></header>
+          <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform</span></div></div></header>
           <div className="wrap">
             <div className="panel highlight mt">
               <h1>Sign-in is not available</h1>
@@ -306,7 +323,7 @@ export default function App() {
     }
     return (
       <div>
-        <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform — director demo</span></div></div></header>
+        <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform</span></div></div></header>
         <div className="wrap">
           <div className="panel highlight mt">
             <h1>Sign in with {auth.provider}</h1>
@@ -323,7 +340,7 @@ export default function App() {
     <div>
       <header className="top">
         <div className="top-inner">
-          <div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform — director demo</span></div>
+          <div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform</span></div>
           <div className="small muted">{apiStatus}</div>
         </div>
       </header>
@@ -332,9 +349,9 @@ export default function App() {
       </nav>
       <div className="wrap">
         {notice && <div className="panel mt" role="status">{notice}</div>}
-        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onRunDemo={runDemoCase} onShowCases={() => setView('cases')} />}
+        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShowCases={() => setView('cases')} />}
         {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} />}
-        {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} mutate={mutate} audit={audit} emit={emit} />}
+        {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} onCreateAndRun={createCaseAndRun} />}
         {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} emit={emit} />}
         {view === 'medallion' && <MedallionView state={state} audit={audit} />}
         {view === 'rag' && <RagView state={state} mutate={mutate} audit={audit} />}
@@ -350,15 +367,15 @@ export default function App() {
 }
 
 /* ---------------- Dashboard ---------------- */
-function Dashboard({ dash, medianMin, costSaved, state, health, onRunDemo, onShowCases }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onRunDemo: () => void; onShowCases: () => void }) {
+function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, onShowCases }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; onShowCases: () => void }) {
   return (
     <section>
       <h1>Five journeys, one agent — end to end</h1>
       <p className="muted">Billing dispute, service provisioning, network outage triage, plan upgrade, and retention — the same agent retrieves Customer 360, grounds itself in policy with STAIR, validates, and proposes. Then it stops for human approval. Nothing is credited, activated, or changed until a person approves it.</p>
+      <CreateCaseForm customers={state.customers} cases={state.cases} onCreateAndRun={onCreateAndRun} />
       <div className="row">
-        <button className="btn accent" onClick={onRunDemo}>Run demo case — CASE-1001, double charge $87.40</button>
         <button className="btn secondary" onClick={onShowCases}>See all 5 journeys</button>
-        <span className="small muted">Takes about 30 seconds, including your approval step.</span>
+        <span className="small muted">Creating a case takes about 30 seconds end to end, including your approval step.</span>
       </div>
       <div className="cards">
         <div className="card"><div className="num">{dash.casesResolved}</div><div className="lbl">Cases resolved by agent</div></div>
@@ -370,10 +387,10 @@ function Dashboard({ dash, medianMin, costSaved, state, health, onRunDemo, onSho
         <div className="card"><div className="num">{state.orders.filter((o) => o.status === 'scheduled').length}</div><div className="lbl">Technician visits scheduled</div></div>
         <div className="card"><div className="num">{state.customers.filter((cu) => cu.plan === 'Unlimited Premium').length}</div><div className="lbl">Customers on Premium (after upgrades)</div></div>
         <div className="card"><div className="num">{dash.casesOpen}</div><div className="lbl">Cases open</div></div>
-        <div className="card"><div className="num">{state.customers.length}</div><div className="lbl">Synthetic customers</div></div>
+        <div className="card"><div className="num">{state.customers.length}</div><div className="lbl">Customers in caseload</div></div>
         <div className="card"><div className="num">{state.runs.length}</div><div className="lbl">Agent runs (all time)</div></div>
       </div>
-      {dash.runs === 0 && <div className="notice">No runs yet — the numbers above show “—” rather than a fake 100%. Run the demo case to see real, measured outcomes.</div>}
+      {dash.runs === 0 && <div className="notice">No runs yet — the numbers above show “—” rather than a fake 100%. Create a case above to see real, measured outcomes.</div>}
       <ProductionReadinessPanel health={health} state={state} />
       <div className="grid2">
         <div className="panel">
@@ -383,7 +400,7 @@ function Dashboard({ dash, medianMin, costSaved, state, health, onRunDemo, onSho
   → RAG over policy docs (cited, refuses when not in docs)
   → Human approval gate → credit posted → ledger + notify
   → Verify → measured outcome → audit log`}</pre>
-          <p className="small muted">The Vercel demo runs the same deterministic engine in TypeScript. The Python FastAPI + LangGraph-style backend in <code>server/</code> is the reference implementation — same rules, same tests. Neither calls a live LLM or a real AT&amp;T system.</p>
+          <p className="small muted">The deployed app runs the same deterministic engine in TypeScript. The Python FastAPI + LangGraph-style backend in <code>server/</code> is the reference implementation — same rules, same tests. Neither calls a live LLM or a real AT&amp;T system.</p>
         </div>
         <div className="panel">
           <h2>Recent runs</h2>
@@ -569,19 +586,13 @@ function CustomersView({ state, mutate, audit, emit }: { state: AppState; mutate
 }
 
 /* ---------------- Cases ---------------- */
-function CasesView({ state, onRun, onApprove, onReject, mutate, audit, emit }: {
+function CasesView({ state, onRun, onApprove, onReject, onCreateAndRun }: {
   state: AppState;
   onRun: (id: string) => Promise<void>;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string) => void;
-  mutate: (fn: (s: AppState) => AppState) => void;
-  audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void;
-  emit: (e: AppEvent) => void;
+  onCreateAndRun: (c: Case, newCustomer?: Customer) => void;
 }) {
-  const [customerId, setCustomerId] = useState('CUST-1001');
-  const [type, setType] = useState<Case['type']>('duplicate_charge');
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('87.40');
   const [running, setRunning] = useState(false);
   const runFor = (caseId: string) => state.runs.find((r) => r.caseId === caseId && (r.status === 'awaiting_approval' || r.status === 'running')) ?? state.runs.find((r) => r.caseId === caseId);
   return (
@@ -639,23 +650,7 @@ function CasesView({ state, onRun, onApprove, onReject, mutate, audit, emit }: {
         );
       })}
 
-      <div className="panel">
-        <h2>Create a case</h2>
-        <div className="grid2">
-          <div><label>Customer</label><select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>{state.customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.id})</option>)}</select></div>
-          <div><label>Type</label><select value={type} onChange={(e) => setType(e.target.value as Case['type'])}><option value="duplicate_charge">Duplicate charge</option><option value="plan_change">Plan change</option><option value="roaming_dispute">Roaming dispute</option><option value="other">Other</option></select></div>
-          <div><label>Title</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Short title" /></div>
-          <div><label>Amount ($)</label><input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-        </div>
-        <button className="btn mt" disabled={!title.trim()} onClick={() => {
-          const id = `CASE-${1000 + state.cases.length + 1}`;
-          const key = `${id.toLowerCase()}-v1`;
-          mutate((s) => ({ ...s, cases: [...s.cases, { id, customerId, type, title: title.trim(), description: title.trim(), amount: Number(amount) || 0, status: 'open', createdAt: nowIso(), idempotencyKey: key }] }));
-          audit('human', 'case_created', `Created case ${id} for ${customerId}.`);
-          emit(newAppEvent('case_created', 'human', `Created case ${id} for ${customerId}.`));
-          setTitle('');
-        }}>Create case</button>
-      </div>
+      <CreateCaseForm customers={state.customers} cases={state.cases} onCreateAndRun={onCreateAndRun} />
     </section>
   );
 }
