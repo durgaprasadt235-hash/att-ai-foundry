@@ -64,6 +64,7 @@
 import type { AppState, Case, Customer, LedgerEntry, PolicyDoc, StairTree, Ticket, UsageRecord } from './types';
 import { getCurrentOperatorId } from './auth';
 import { seedState } from './seed';
+import { sortCustomersByName } from './customer-search';
 
 export const DATASET_MAX_BYTES = 5_000_000;
 
@@ -500,6 +501,8 @@ export function datasetFromCsvFiles(files: { name: string; text: string }[]): { 
 /** Build a fresh working state from validated tables. Runs, pipeline runs,
  *  evals and notifications start empty — the new dataset is a fresh
  *  caseload. The built-in seed files on disk are never touched.
+ *  Customers are stored A–Z by name (see sortCustomersByName) —
+ *  uploaded and cleansed datasets load in the same order as the seed.
  *  `cleanseSummary` is passed when the tables came out of the cleanser
  *  (lib/cleanse.ts) — it is recorded in the audit entry so the load is
  *  traceable to its corrections and quarantines. */
@@ -507,7 +510,7 @@ export function datasetToState(tables: DatasetTables, name: string, cleanseSumma
   const seed = seedState();
   const now = new Date().toISOString();
   return {
-    customers: tables.customers,
+    customers: sortCustomersByName(tables.customers),
     ledger: tables.ledger,
     usage: tables.usage,
     tickets: tables.tickets,

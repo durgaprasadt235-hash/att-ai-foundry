@@ -9,6 +9,7 @@ import { useState } from 'react';
 import type { Case, Customer } from '../lib/types';
 import { JOURNEYS, PLAN_OPTIONS, buildCase, type JourneyId } from '../lib/case-intake';
 import { uid } from '../lib/store';
+import { sortCustomersByName } from '../lib/customer-search';
 
 export default function CreateCaseForm({ customers, cases, onCreateAndRun, preselectedCustomerId }: {
   customers: Customer[];
@@ -20,7 +21,15 @@ export default function CreateCaseForm({ customers, cases, onCreateAndRun, prese
   preselectedCustomerId?: string;
 }) {
   const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing');
-  const [customerId, setCustomerId] = useState(preselectedCustomerId ?? customers[0]?.id ?? '');
+  // No default customer — ever. The picker starts empty and the operator
+  // must choose (or the form is pre-filled from a customer the operator
+  // already found and confirmed). Defaulting to the first customer in
+  // the list put Maya Rodriguez on the Dashboard on every load, so a
+  // case could be created against the wrong person without anyone
+  // noticing.
+  const [customerId, setCustomerId] = useState(preselectedCustomerId ?? '');
+  // The picker lists customers A–Z by name, like every other list.
+  const sortedCustomers = sortCustomersByName(customers);
   const [newName, setNewName] = useState('');
   const [newPlan, setNewPlan] = useState(PLAN_OPTIONS[0]);
   const [journey, setJourney] = useState<JourneyId>('billing_dispute');
@@ -99,7 +108,8 @@ export default function CreateCaseForm({ customers, cases, onCreateAndRun, prese
           <div>
             <label>Pick a customer</label>
             <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.id}) — {c.plan}</option>)}
+              <option value="">Select a customer…</option>
+              {sortedCustomers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.id}) — {c.plan}</option>)}
             </select>
           </div>
         ) : (

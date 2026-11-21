@@ -84,30 +84,59 @@ hours, and the trace names both the case amount and the policy credit
 (CASE-1007: the $18.45 case amount is the reported device installment; the
 credit is $25.00).
 
-**Run it in under 2 minutes:** open the app → Dashboard → **Find a customer**
-(search by name, phone, account number, email or customer ID — or press
-**Simulate incoming call (611)** to see the calling line identify the account)
-→ open Customer 360 → **Create a case** → **Create case & run agent** →
-approve the proposed credit → watch the balance change, the notification
-appear, and the ROI numbers move. Every case is a real record you just
-created — there is no canned demo case. The 12 seeded cases in the
-Cases view are the existing caseload, each runnable from its own row.
+**Run it in under 2 minutes:** open the app → Dashboard → **Find & confirm customer**
+(search by name, by name + number, by number, account, email or customer ID —
+then verify with the 6-digit PIN, or a one-time code after the registered
+email is confirmed) → the confirmed customer's 360 opens → **Create a case**
+→ **Create case & run agent** → approve the proposed credit → watch the
+balance change, the notification appear, and the ROI numbers move. Every
+case is a real record you just created — there is no canned demo case. The 12
+seeded cases in the Cases view are the existing caseload, each runnable from
+its own row.
 
-## Find a customer — where every call starts
+## Find & confirm customer — where every call starts
 
-The agent's first step is Customer 360, and before that someone has to
-find the account. The Customers view is that lookup:
+"User" here means the **operator** using this dashboard, not the AT&T
+customer. The operator finds the customer and can change that person's
+billing, usage or services — so before anything changes, the app must know
+**whose** data it is, and verify it from the customer end. That is the
+**Find & confirm customer** form, fixed at the top of the Dashboard and at
+the top of the Customers view:
 
-- **One search box**, matched across name (partial, case-insensitive),
-  phone number (digits only — `2015550142`, `(201) 555-0142` and
-  `555-0142` all match the same line), account number (`ACC-…`),
-  email, and customer ID (`CUST-…`). Every result shows *why* it
-  matched ("matched phone", "matched account"). Empty query lists the
-  caseload, capped at 50 rows with the total shown.
+- **Customer data loads A–Z by name** (case-insensitive, tie-break by
+  customer ID) at every load path — built-in seed, uploaded dataset,
+  cleansed dataset — and search results are A–Z too. No customer is
+  ever first by accident.
+- **No default customer anywhere.** The Dashboard shows no customer name
+  until the operator finds and confirms one, and the case-intake picker
+  starts empty ("Select a customer…") and is required. (It used to
+  default to the first customer in the list, so Maya Rodriguez was
+  pre-selected on every load — a case could be created against the wrong
+  person without anyone noticing. That default is removed.)
+- **Step 1 — Identify:** name and phone number fields (account number
+  optional). Search by name, by name + number, by number, account,
+  email or customer ID, with the match reason shown per result
+  ("matched phone", "matched account"). Empty query lists the caseload,
+  capped at 50 rows with the total shown.
+- **Step 2 — Verify, the way AT&T does it today:** name + phone number
+  first, then the **6-digit account PIN** the customer created. If they
+  don't have it, a one-time code goes to the registered phone/email —
+  but only after the customer confirms the registered email matches the
+  one they use: the operator types the email the customer says they
+  use, the form checks it against the registered email on file, and
+  only a match enables sending the code. A mismatch sends nothing.
+- **Step 3 — Confirmed:** a compact banner (name, account, "Verified via
+  PIN / one-time code at <time>") with a **Change customer** action —
+  the next customer must be verified again. The confirmed customer
+  becomes the context: their Customer 360 opens and the Dashboard
+  intake form is pre-filled with them.
 - **Customer 360** for the selected person — plan, balance, status,
   since, city, ledger, usage, open cases — the same 360 the agent
-  builds in its `RETRIEVE_360` step. From there: **Create case for this
-  customer** (intake form pre-filled) or **Run agent** on an open case.
+  builds in its `RETRIEVE_360` step — shows the verification status:
+  "Verified via PIN at <time>" or "Not verified — verify before
+  changing billing, usage or services". From there: **Create case for
+  this customer** (intake form pre-filled) or **Run agent** on an open
+  case.
 - **Simulate incoming call (611)** — picks a customer and pre-fills the
   search with their phone number, the way dialling 611 identifies the
   calling line before the agent speaks. Clearly labelled as a simulation.
@@ -124,11 +153,35 @@ find the account. The Customers view is that lookup:
   uploaded file); in production it runs against the CRM through the
   `att` datasource adapter.
 
+**Honest demo limits:** no PIN is stored for any test customer and no
+real SMS/email is ever sent. Verification is recorded as an **operator
+attestation** (method + timestamp) — the operator confirms the customer
+gave the PIN on the call, or received and read back the code. It is
+never presented as a cryptographic check. Production checks the PIN /
+sends the code through the account verification service.
+
+**Verification is recorded, not enforced — yet.** Every action's audit
+entry carries the verification status of the customer it touched
+("verified via PIN at <time>" or "not verified in this session"), and
+the 360 shows it. Nothing is blocked on it today.
+
+> **TODO (future, explicit): enforce verified-before-change.** Block
+> billing / usage / service changes — case create, agent run, approve,
+> customer delete — until the customer is verified in this session,
+> and surface "verify first" in the UI instead of failing silently.
+> The status is already recorded on every audit entry, so switching
+> this on is a gate on recorded state, not a new data model.
+
 The search runs on whatever is in state — an uploaded dataset is
 searchable the same way as the seed. Verified by the smoke check in
-`tmp/smoke-search.ts` (esbuild-bundled, run with node): "maya",
-"2015550142", "ACC-884120" and "CUST-1001" each find Maya Rodriguez,
-"zzz-no-match" finds nobody, and a 1,000-customer list caps at 50 rows.
+`tmp/smoke-confirm.ts` (esbuild-bundled, run with node): customers load
+A–Z with Aria Bellamy first, no component defaults to the first
+customer, the confirm flow reaches "confirmed" via PIN and via
+OTP-with-matching-email, and OTP is refused when the typed email does
+not match the registered one. The earlier search checks live in
+`tmp/smoke-search.ts`: "maya", "2015550142", "ACC-884120" and
+"CUST-1001" each find Maya Rodriguez, "zzz-no-match" finds nobody, and
+a 1,000-customer list caps at 50 rows.
 
 ## Staff accountability (backend only)
 

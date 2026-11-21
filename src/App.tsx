@@ -14,6 +14,7 @@ import { getCurrentOperatorId } from './lib/auth';
 import { SEARCH_RESULT_LIMIT, searchCustomers } from './lib/customer-search';
 import DataView from './components/DataView';
 import CreateCaseForm from './components/CreateCaseForm';
+import ConfirmCustomerForm, { formatVerifiedAt, verificationLabel, type CustomerConfirmation, type VerificationMethod } from './components/ConfirmCustomerForm';
 
 /** Shape of GET /api/health (mirrors api/health.ts + server/app.py). The
  *  frontend reads config/datasource/LLM/auth status from here — the
@@ -75,6 +76,13 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState('checking…');
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [notice, setNotice] = useState('');
+  // The confirmed customer for this session — shared by the Dashboard
+  // and the Customers view (see components/ConfirmCustomerForm.tsx).
+  // Null until the operator finds AND verifies a customer. This is
+  // session state, not part of the persisted caseload.
+  const [confirmed, setConfirmed] = useState<CustomerConfirmation | null>(null);
+  const confirmedRef = useRef(confirmed);
+  confirmedRef.current = confirmed;
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -109,6 +117,31 @@ export default function App() {
     mutate((s) => ({ ...s, events: [event, ...(s.events ?? [])].slice(0, 200) }));
   };
 
+  // ---------- Find & confirm customer (see components/ConfirmCustomerForm.tsx) ----------
+  // Every change the operator makes is to a specific person's billing /
+  // usage / services, so we must know WHOSE data is being changed — and
+  // that it was verified from the customer end. The verification status
+  // is recorded on the audit entries below (never a hard block — see
+  // the TODO in README.md / docs/PRD.md: enforce verified-before-change
+  // is future work, not switched on yet).
+  const verificationStatusFor = (customerId: string): string => {
+    const c = confirmedRef.current;
+    if (c && c.customerId === customerId) return `verified via ${verificationLabel(c.method)} at ${c.at}`;
+    return 'not verified in this session';
+  };
+  const confirmCustomer = (customer: Customer, method: VerificationMethod) => {
+    const at = nowIso();
+    setConfirmed({ customerId: customer.id, method, at });
+    confirmedRef.current = { customerId: customer.id, method, at };
+    audit('human', 'customer_verified', `Customer ${customer.id} verified via ${verificationLabel(method)} (operator attestation — demo: no PIN is stored and no real code is sent; production checks the account verification service).`);
+  };
+  const clearConfirmation = () => {
+    const prev = confirmedRef.current;
+    setConfirmed(null);
+    confirmedRef.current = null;
+    if (prev) audit('human', 'customer_unconfirmed', `Customer confirmation cleared (was ${prev.customerId}, verified via ${verificationLabel(prev.method)}). Next customer must be verified again.`);
+  };
+
   // ---------- Agent run: plan -> pause for approval -> execute on approval ----------
   const runAgent = async (caseId: string) => {
     const snap = stateRef.current;
@@ -140,7 +173,7 @@ export default function App() {
       run = { ...run, status: 'failed', finishedAt: nowIso() };
       const runCopy = run;
       mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? runCopy : r), cases: s.cases.map((x) => x.id === caseId ? { ...x, status: 'failed', resolution: plan.failureReason! } : x) }));
-      audit('agent', 'run_failed', `${runId} for ${caseId} failed: ${plan.failureReason}`, { runId, durationMs: Math.round(performance.now() - t0), traceId });
+      audit('agent', 'run_failed', `${runId} for ${caseId} failed: ${plan.failureReason} [customer verification: ${verificationStatusFor(c.customerId)}]`, { runId, durationMs: Math.round(performance.now() - t0), traceId });
       emit(newAppEvent('run_failed', 'agent', `${runId} for ${caseId} failed: ${plan.failureReason}`, { runId, traceId }));
       setNotice(`Run failed honestly: ${plan.failureReason}`);
       return;
@@ -148,7 +181,7 @@ export default function App() {
     run = { ...run, status: 'awaiting_approval' };
     const runCopy = run;
     mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? runCopy : r), cases: s.cases.map((x) => x.id === caseId ? { ...x, status: 'awaiting_approval' } : x) }));
-    audit('agent', 'awaiting_approval', `${runId} for ${caseId} proposes a credit of ${money(plan.proposedCredit ?? 0)} and is paused for human approval.`, { runId, durationMs: Math.round(performance.now() - t0), traceId });
+    audit('agent', 'awaiting_approval', `${runId} for ${caseId} proposes a credit of ${money(plan.proposedCredit ?? 0)} and is paused for human approval. [customer verification: ${verificationStatusFor(c.customerId)}]`, { runId, durationMs: Math.round(performance.now() - t0), traceId });
     emit(newAppEvent(plan.proposedCredit !== null ? 'credit_proposed' : 'plan_proposed', 'agent', `${runId} for ${caseId} proposes ${plan.proposedAction ?? `a credit of ${money(plan.proposedCredit ?? 0)}`} and is paused for human approval.`, { runId, traceId }));
     setNotice(`Agent paused for approval: proposed credit ${money(plan.proposedCredit ?? 0)} for ${caseId}. Approve or reject below.`);
   };
@@ -165,7 +198,7 @@ export default function App() {
       customers: newCustomer ? [...s.customers, newCustomer] : s.customers,
       cases: [...s.cases, c],
     }));
-    audit('human', 'case_created', `Created case ${c.id} for ${c.customerId} (${c.type}, ${money(c.amount)}).`);
+    audit('human', 'case_created', `Created case ${c.id} for ${c.customerId} (${c.type}, ${money(c.amount)}). [customer verification: ${verificationStatusFor(c.customerId)}]`);
     emit(newAppEvent('case_created', 'human', `Created case ${c.id} for ${c.customerId} (${c.type}, ${money(c.amount)}).`));
     setView('cases');
     await runAgent(c.id);
@@ -183,7 +216,7 @@ export default function App() {
     // --- Credit effects: idempotency first — never credit twice. ---
     if ((kind === 'credit' || kind === 'outage_credit' || kind === 'retention_offer') && creditAlreadyApplied(snap, c.id)) {
       mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? { ...r, status: 'completed', finishedAt: nowIso(), duplicateOfRunId: s.runs.find((x) => x.caseId === c.id && x.status === 'completed')?.id, failureReason: 'Credit already applied — idempotent, no second credit.' } : r) }));
-      audit('human', 'approve_duplicate', `Approval for ${runId} was a duplicate: credit already applied for ${c.id}. No second credit issued.`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
+      audit('human', 'approve_duplicate', `Approval for ${runId} was a duplicate: credit already applied for ${c.id}. No second credit issued. [customer verification: ${verificationStatusFor(c.customerId)}]`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
       setNotice('Credit was already applied — idempotent. No second credit issued.');
       return;
     }
@@ -191,7 +224,7 @@ export default function App() {
       const dup = findDuplicate(snap.ledger, c.customerId);
       if (!dup || run.proposedCredit === null) {
         mutate((s) => ({ ...s, runs: s.runs.map((r) => r.id === runId ? { ...r, status: 'failed', finishedAt: nowIso(), failureReason: 'Duplicate no longer present at approval time.' } : r), cases: s.cases.map((x) => x.id === c.id ? { ...x, status: 'failed', resolution: 'Duplicate no longer present at approval time.' } : x) }));
-        audit('human', 'approve_failed', `Approval for ${runId} failed: duplicate no longer present.`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
+        audit('human', 'approve_failed', `Approval for ${runId} failed: duplicate no longer present. [customer verification: ${verificationStatusFor(c.customerId)}]`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
         return;
       }
       await finishRun(runId, c, kind, `Credit ${money(run.proposedCredit)} posted against ${dup.duplicate.invoice}.`, t0, (s) => {
@@ -284,7 +317,7 @@ export default function App() {
         cases: applied.cases.map((x) => x.id === c.id ? { ...x, status: 'resolved', resolution } : x),
       };
     });
-    audit('human', 'approved', `Human approved ${runId} (${kind}): ${resolution}`, { runId, durationMs: agentMs, traceId: run.traceId });
+    audit('human', 'approved', `Human approved ${runId} (${kind}): ${resolution} [customer verification: ${verificationStatusFor(c.customerId)}]`, { runId, durationMs: agentMs, traceId: run.traceId });
     const creditKind = kind === 'credit' || kind === 'outage_credit' || kind === 'retention_offer';
     emit(newAppEvent(creditKind ? 'credit_approved' : 'plan_approved', 'human', `Human approved ${runId} (${kind}): ${resolution}`, { runId, traceId: run.traceId }));
     emit(newAppEvent(creditKind ? 'credit_executed' : 'plan_executed', 'human', `Human approved ${runId} (${kind}): ${resolution}`, { runId, traceId: run.traceId }));
@@ -300,7 +333,8 @@ export default function App() {
       runs: s.runs.map((r) => r.id === runId ? { ...r, status: 'rejected', finishedAt: nowIso() } : r),
       cases: s.cases.map((x) => x.id === run.caseId ? { ...x, status: 'rejected', resolution: 'Human reviewer rejected the proposed credit. No money moved.' } : x),
     }));
-    audit('human', 'rejected_credit', `Human rejected ${runId}: no credit issued, no ledger change.`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
+    const caseForRun = snap.cases.find((x) => x.id === run.caseId);
+    audit('human', 'rejected_credit', `Human rejected ${runId}: no credit issued, no ledger change.${caseForRun ? ` [customer verification: ${verificationStatusFor(caseForRun.customerId)}]` : ''}`, { runId, durationMs: run.agentMs ?? null, traceId: run.traceId });
     setNotice('Rejected: no credit issued, no ledger change. The case can be re-run after review.');
   };
 
@@ -377,9 +411,9 @@ export default function App() {
       </nav>
       <div className="wrap">
         {notice && <div className="panel mt" role="status">{notice}</div>}
-        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShowCases={() => setView('cases')} onShowCustomers={() => setView('customers')} />}
+        {view === 'dashboard' && <Dashboard dash={dash} medianMin={medianMin} costSaved={costSaved} state={state} health={health} onCreateAndRun={createCaseAndRun} onShowCases={() => setView('cases')} onShow360={() => setView('customers')} confirmed={confirmed} onConfirmCustomer={confirmCustomer} onClearConfirmation={clearConfirmation} audit={audit} />}
         {view === 'data' && <DataView state={state} onLoadDataset={loadDataset} onReset={resetDataset} audit={audit} />}
-        {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} onRun={runAgent} onCreateAndRun={createCaseAndRun} />}
+        {view === 'customers' && <CustomersView state={state} mutate={mutate} audit={audit} emit={emit} onRun={runAgent} onCreateAndRun={createCaseAndRun} confirmed={confirmed} onConfirmCustomer={confirmCustomer} onClearConfirmation={clearConfirmation} />}
         {view === 'cases' && <CasesView state={state} onRun={runAgent} onApprove={approveRun} onReject={rejectRun} onCreateAndRun={createCaseAndRun} />}
         {view === 'pipelines' && <PipelinesView state={state} mutate={mutate} audit={audit} emit={emit} />}
         {view === 'medallion' && <MedallionView state={state} audit={audit} />}
@@ -396,17 +430,13 @@ export default function App() {
 }
 
 /* ---------------- Dashboard ---------------- */
-function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, onShowCases, onShowCustomers }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; onShowCases: () => void; onShowCustomers: () => void }) {
+function Dashboard({ dash, medianMin, costSaved, state, health, onCreateAndRun, onShowCases, onShow360, confirmed, onConfirmCustomer, onClearConfirmation, audit }: { dash: ReturnType<typeof dashboard>; medianMin: number | null; costSaved: number; state: AppState; health: HealthStatus | null; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; onShowCases: () => void; onShow360: () => void; confirmed: CustomerConfirmation | null; onConfirmCustomer: (customer: Customer, method: VerificationMethod) => void; onClearConfirmation: () => void; audit: (actor: 'human', action: string, detail: string) => void }) {
   return (
     <section>
       <h1>Five journeys, one agent — end to end</h1>
       <p className="muted">Billing dispute, service provisioning, network outage triage, plan upgrade, and retention — the same agent retrieves Customer 360, grounds itself in policy with STAIR, validates, and proposes. Then it stops for human approval. Nothing is credited, activated, or changed until a person approves it.</p>
-      <div className="panel">
-        <h2>Find a customer — where every call starts</h2>
-        <p className="small muted">The agent's first step is Customer 360, and before that someone has to find the account — by name, phone, account number or email. Search the caseload, open the customer's 360 view, and create a case from there.</p>
-        <button className="btn accent" onClick={onShowCustomers}>Find a customer</button>
-      </div>
-      <CreateCaseForm customers={state.customers} cases={state.cases} onCreateAndRun={onCreateAndRun} />
+      <ConfirmCustomerForm key={confirmed ? confirmed.customerId : 'none'} customers={state.customers} confirmed={confirmed} onConfirm={onConfirmCustomer} onClear={onClearConfirmation} onView360={onShow360} audit={audit} />
+      <CreateCaseForm key={confirmed ? `confirmed-${confirmed.customerId}` : 'none'} customers={state.customers} cases={state.cases} preselectedCustomerId={confirmed?.customerId} onCreateAndRun={onCreateAndRun} />
       <div className="row">
         <button className="btn secondary" onClick={onShowCases}>See all 5 journeys</button>
         <span className="small muted">Creating a case takes about 30 seconds end to end, including your approval step.</span>
@@ -560,12 +590,21 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
 }
 
 /* ---------------- Customers ---------------- */
-function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void; onRun: (id: string) => Promise<void>; onCreateAndRun: (c: Case, newCustomer?: Customer) => void }) {
+function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun, confirmed, onConfirmCustomer, onClearConfirmation }: { state: AppState; mutate: (fn: (s: AppState) => AppState) => void; audit: (a: 'agent' | 'human' | 'system', b: string, c: string) => void; emit: (e: AppEvent) => void; onRun: (id: string) => Promise<void>; onCreateAndRun: (c: Case, newCustomer?: Customer) => void; confirmed: CustomerConfirmation | null; onConfirmCustomer: (customer: Customer, method: VerificationMethod) => void; onClearConfirmation: () => void }) {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Customer | null>(null);
   const [showIntake, setShowIntake] = useState(false);
   const [name, setName] = useState('');
   const [plan, setPlan] = useState('Unlimited Starter');
+  // A customer confirmed on the Dashboard (or here) becomes the context
+  // here too: their 360 opens automatically. Clearing the confirmation
+  // closes it — the next customer must be found and verified again.
+  useEffect(() => {
+    if (confirmed) {
+      const c = state.customers.find((x) => x.id === confirmed.customerId);
+      if (c) { setSel(c); setShowIntake(false); }
+    }
+  }, [confirmed?.customerId]);
   // One search box, matched across name / phone / account / email /
   // customer ID (see lib/customer-search.ts). It searches whatever is
   // in state — the built-in seed or an uploaded dataset.
@@ -588,7 +627,8 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { 
   return (
     <section>
       <h1>Find a customer</h1>
-      <p className="muted">Where every call starts: find the account, open Customer 360 — the same 360 the agent builds in its RETRIEVE_360 step — then create a case from there. Search by name, phone number, account number, email or customer ID. Synthetic demo data — invented names, accounts and phone numbers. No real PII.</p>
+      <p className="muted">Where every call starts: find the account, verify the customer, open Customer 360 — the same 360 the agent builds in its RETRIEVE_360 step — then create a case from there. Search by name, phone number, account number, email or customer ID. Synthetic demo data — invented names, accounts and phone numbers. No real PII.</p>
+      <ConfirmCustomerForm key={confirmed ? confirmed.customerId : 'none'} customers={state.customers} confirmed={confirmed} onConfirm={(customer, method) => { onConfirmCustomer(customer, method); setSel(customer); setShowIntake(false); }} onClear={() => { onClearConfirmation(); setSel(null); setShowIntake(false); }} audit={audit} />
       <div className="row">
         <input className="search" type="text" placeholder="Search name, phone, account, email or customer ID…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
         <button className="btn" onClick={() => {
@@ -636,6 +676,11 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { 
           <p className="small muted">{view360.customer.id} · {view360.customer.account} · {view360.customer.phone}{view360.customer.email ? ` · ${view360.customer.email}` : ''}</p>
           <p className="small">Plan: <strong>{view360.customer.plan}</strong> · Balance: <strong>{money(view360.customer.balance)}</strong> · Status: <strong>{view360.customer.status}</strong> · Customer since {view360.customer.since} · {view360.customer.city}</p>
           <p className="small muted">This is the same Customer 360 the agent builds in its RETRIEVE_360 step before it grounds itself in policy — one record, assembled from CRM, billing and usage.</p>
+          {confirmed && confirmed.customerId === view360.customer.id ? (
+            <p className="small ok">Verified via {verificationLabel(confirmed.method)} at {formatVerifiedAt(confirmed.at)} — this session. Changes below apply to this customer.</p>
+          ) : (
+            <p className="small error">Not verified — verify before changing billing, usage or services. Use “Find &amp; confirm customer” at the top of this view. (Verification is recorded, not enforced yet — see README.md / docs/PRD.md.)</p>
+          )}
           <div className="grid3">
             <div><h3>Billing ledger</h3>{view360.ledger.length === 0 ? <p className="muted small">No entries.</p> : view360.ledger.map((e) => <p key={e.id} className="small">{e.date} · {e.invoice} · {e.service} · <strong>{money(e.amount)}</strong> · {e.status}</p>)}</div>
             <div><h3>Usage</h3>{view360.usage.length === 0 ? <p className="muted small">No usage records.</p> : view360.usage.map((u) => <p key={u.id} className="small">{u.month}: {u.dataGb} GB, {u.minutes} min, {u.sms} SMS</p>)}</div>
@@ -651,7 +696,7 @@ function CustomersView({ state, mutate, audit, emit, onRun, onCreateAndRun }: { 
             <button className="btn accent" onClick={() => setShowIntake((v) => !v)}>{showIntake ? 'Hide case form' : `Create case for ${view360.customer.name}`}</button>
             <ConfirmButton label="Delete customer" confirmLabel="Confirm delete" kind="danger" onConfirm={() => {
               mutate((s) => ({ ...s, customers: s.customers.filter((c) => c.id !== view360.customer!.id) }));
-              audit('human', 'customer_deleted', `Deleted customer ${view360.customer!.id}.`);
+              audit('human', 'customer_deleted', `Deleted customer ${view360.customer!.id}. [customer verification: ${confirmed && confirmed.customerId === view360.customer!.id ? `verified via ${verificationLabel(confirmed.method)} at ${confirmed.at}` : 'not verified in this session'}]`);
               setSel(null);
               setShowIntake(false);
             }} />

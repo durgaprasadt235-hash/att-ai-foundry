@@ -87,7 +87,7 @@ plan → Customer 360 → STAIR grounding → validate → propose
 
 | Step | What happens | Failure behaviour |
 |---|---|---|
-| **Find customer (step 0)** | Before the workflow starts, the operator finds the account in the Customers view — one search box across name, phone (digits only), account number, email and customer ID, with the match reason shown per result — and opens Customer 360. This mirrors how AT&T finds a customer today: the calling phone number first (611 identifies the line), otherwise the account number, then name + phone, verified with the 6-digit account PIN the customer created; without the PIN, a one-time code is sent to the registered phone or email only after the customer confirms the registered email matches. "Simulate incoming call (611)" demonstrates the phone-first path. The lookup searches whatever dataset is loaded (seed or uploaded file); in production it runs against the CRM through the `att` adapter. | No match → empty result list, nothing invented; a 1,000-customer list caps at 50 rows with the total shown |
+| **Find & confirm customer (step 0)** | Before the workflow starts, the operator finds and confirms the account with the fixed "Find & confirm customer" form (top of Dashboard and Customers view). Customers load A–Z by name at every load path; no customer is ever pre-selected and the intake picker starts empty. Step 1 identify by name, name + number, number, account, email or ID, with the match reason shown per result. Step 2 verify the way AT&T does today: name + phone, then the 6-digit account PIN the customer created; without the PIN, a one-time code is sent to the registered phone/email only after the customer confirms the registered email matches. Step 3 confirmed banner (method + time) — "Change customer" clears it and the next customer must be verified again. The confirmed customer becomes the context: their 360 opens and the intake form is pre-filled. "Simulate incoming call (611)" demonstrates the phone-first path. The lookup searches whatever dataset is loaded (seed or uploaded file); in production it runs against the CRM through the `att` adapter. Demo honesty: no PIN is stored and no real code is sent — verification is an operator attestation (method + timestamp), never presented as a cryptographic check. Verification is recorded, not enforced yet: the 360 shows "Verified via PIN at <time>" or "Not verified", and every action's audit entry carries the verification status. TODO (future): enforce verified-before-change — block billing/usage/service changes until the customer is verified in this session. | No match → empty result list, nothing invented; a 1,000-customer list caps at 50 rows with the total shown; OTP refused when the typed email does not match the registered email |
 | Plan | Agent reads the case and selects the workflow (billing / provisioning / outage / plan / retention) | Unknown case type fails honestly: "no agent workflow for this type" |
 | Customer 360 | Loads the customer, ledger, and usage from the data source — the same 360 the lookup opened | Unknown customer / missing record fails honestly |
 | STAIR grounding | Retrieves the exact policy leaf from the structured policy tree, cited by full path (e.g. `Billing Policy > Credits > Duplicate Charges §4.2`) | No matching policy → "Not found in policy", no answer invented |
@@ -299,7 +299,10 @@ engineering team required for day-to-day operation.
   carries the operator's login id (`operatorId`) — search, Customer 360
   views, case creates, agent runs, approvals, rejections, deletions,
   dataset loads, pipeline and Medallion runs — so any change to a
-  customer or data can be traced to who made it. The id is stored on
+  customer or data can be traced to who made it. Every action's audit
+  entry also carries the touched customer's verification status
+  ("verified via PIN/OTP at <time>" or "not verified in this session"),
+  and the Customer 360 shows it. The id is stored on
   the record for backend investigation and never rendered on any
   screen. Demo mode uses the single labelled id `demo-operator`;
   production resolves it from the signed-in operator's Entra ID

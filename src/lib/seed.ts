@@ -5,9 +5,13 @@
 // (charge adds, credit/payment subtract) — see signedLedgerAmount in
 // lib/dataset.ts. test-data.json itself is kept verbatim and unmodified.
 import type { AppState } from './types';
+import { sortCustomersByName } from './customer-search';
 
 export function seedState(): AppState {
-  return {
+  // Customer data loads in alphabetical order (by name A–Z) — see
+  // sortCustomersByName in lib/customer-search.ts. The literal order
+  // below is file order only; the returned state is always sorted.
+  const state: AppState = {
     seededAt: new Date().toISOString(),
     customers: [
       {"id": "CUST-1001", "name": "Maya Rodriguez", "account": "ACC-884120", "phone": "(201) 555-0142", "email": "maya.rodriguez.demo@example.com", "plan": "Unlimited Premium", "status": "active", "since": "2022-02-02", "balance": 194.32, "city": "Jersey City, NJ"},
@@ -201,4 +205,6 @@ export function seedState(): AppState {
     ],
     notifications: [],
   };
+  state.customers = sortCustomersByName(state.customers);
+  return state;
 }

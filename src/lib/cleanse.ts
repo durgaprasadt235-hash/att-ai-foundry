@@ -56,6 +56,7 @@ import {
   type DatasetTables,
   type DatasetValidation,
 } from './dataset';
+import { sortCustomersByName } from './customer-search';
 
 export interface CleanseCorrection {
   table: string;
@@ -222,6 +223,9 @@ export function cleanseTables(raw: DatasetTables): { cleansed: DatasetTables | n
     if (!Array.isArray((work as unknown as Record<string, unknown>)[k])) (work as unknown as Record<string, unknown>)[k] = [];
   }
   if (!Array.isArray(work.orders)) work.orders = [];
+  // Cleansed output loads A–Z by customer name, like every other load
+  // path — the production-ready file is sorted too.
+  work.customers = sortCustomersByName(work.customers);
 
   // Raw validation = the pre-check report. It also applies the
   // deterministic fills (case status, idempotencyKey, createdAt, ticket

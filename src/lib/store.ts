@@ -1,5 +1,6 @@
 import type { AppState } from './types';
 import { seedState } from './seed';
+import { sortCustomersByName } from './customer-search';
 
 const KEY = 'att-ai-foundry-v1';
 
@@ -8,7 +9,12 @@ export function loadState(): AppState {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as AppState;
-      if (parsed && Array.isArray(parsed.customers) && Array.isArray(parsed.cases)) return parsed;
+      // States persisted before the A–Z rule (or with a customer added
+      // in-app, which appends unsorted) are re-sorted on load.
+      if (parsed && Array.isArray(parsed.customers) && Array.isArray(parsed.cases)) {
+        parsed.customers = sortCustomersByName(parsed.customers);
+        return parsed;
+      }
     }
   } catch { /* corrupted storage: reseed below */ }
   const fresh = seedState();

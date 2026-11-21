@@ -70,7 +70,20 @@ export function matchCustomer(customer: Customer, query: string): string[] {
   return reasons;
 }
 
-/** Search the loaded caseload (seed or uploaded dataset) by any identifier. */
+/** Sort customers by name A–Z (case-insensitive, tie-break by customer
+ *  id). Every load path sorts — seed, upload, cleanse — so no view ever
+ *  sees file order, and no customer is ever "first" by accident. Ids,
+ *  casing and every other field are untouched. */
+export function compareCustomersByName(a: Customer, b: Customer): number {
+  const byName = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  return byName !== 0 ? byName : a.id.localeCompare(b.id);
+}
+
+export function sortCustomersByName(customers: Customer[]): Customer[] {
+  return [...customers].sort(compareCustomersByName);
+}
+
+/** Search the loaded caseload (seed or uploaded dataset) by any identifier. Results are A–Z. */
 export function searchCustomers(customers: Customer[], query: string): CustomerSearchOutcome {
   const matches: CustomerSearchResult[] = [];
   for (const customer of customers) {
@@ -79,5 +92,6 @@ export function searchCustomers(customers: Customer[], query: string): CustomerS
   }
   const total = matches.length;
   const capped = total > SEARCH_RESULT_LIMIT;
+  matches.sort((x, y) => compareCustomersByName(x.customer, y.customer));
   return { results: matches.slice(0, SEARCH_RESULT_LIMIT), total, capped };
 }
