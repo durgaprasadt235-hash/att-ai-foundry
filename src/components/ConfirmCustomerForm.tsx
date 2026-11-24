@@ -1,11 +1,11 @@
 // Find & confirm customer — the fixed small form at the top of the
 // Dashboard and the Customers view, where every call starts.
 //
-// "User" here means the OPERATOR using this dashboard, not the AT&T
+// "User" here means the OPERATOR using this dashboard, not the carrier
 // customer. The operator finds the customer and can change that
 // person's billing / usage / services — so before anything changes we
 // must know WHOSE data it is, and verify it from the customer end.
-// That is what this form does, following AT&T's current verification
+// That is what this form does, following the carrier's current verification
 // process: identify by name, phone, account, email or ID, then the
 // 6-digit account PIN the customer created; without the PIN, a
 // one-time code goes to the registered phone/email — but only after

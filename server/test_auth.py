@@ -2,7 +2,7 @@
 
 The gate is DISABLED by default; enabled without config it reports
 "auth not configured" and never a fake login; enabled with config it is
-a clearly-labelled placeholder (production: AT&T Entra ID).
+a clearly-labelled placeholder (production: Entra ID).
 Run: python3 -m pytest server/test_auth.py -v
 """
 from __future__ import annotations

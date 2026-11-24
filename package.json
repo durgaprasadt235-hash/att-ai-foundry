@@ -3,7 +3,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
-  "description": "Telecom Project \u2014 Enterprise Customer & Operational Data Platform with GenAI Integration. Director-grade working prototype: real state changes, deterministic LangGraph-style agent, grounded RAG, measurable outcomes. Synthetic demo data only; live Groq LLM only when GROQ_API_KEY is set, no real AT&T systems.",
+  "description": "Telecom Project \u2014 Enterprise Customer & Operational Data Platform with GenAI Integration. Director-grade working prototype: real state changes, deterministic LangGraph-style agent, grounded RAG, measurable outcomes. Synthetic demo data only; live Groq LLM only when GROQ_API_KEY is set, no real carrier systems.",
   "devDependencies": {
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

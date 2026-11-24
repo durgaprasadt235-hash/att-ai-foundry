@@ -1,9 +1,9 @@
 """Pytest unit tests for the data-source switch (server/datasource.py).
 
-Seed mode loads the synthetic seed. `att` mode maps AT&T payloads onto
+Seed mode loads the synthetic seed. `att` mode maps carrier payloads onto
 the existing record types — and FAILS HONESTLY on any failure: it never
 silently falls back to seed data. The HTTP calls are mocked; no real
-AT&T API exists in this repo.
+carrier API exists in this repo.
 Run: python3 -m pytest server/test_datasource.py -v
 """
 from __future__ import annotations

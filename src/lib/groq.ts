@@ -5,7 +5,7 @@
 // Two facts that cost a morning to learn:
 // * Groq (behind Cloudflare) returns 403 error code 1010 for a missing /
 //   default User-Agent. Every request MUST send a real User-Agent
-//   ("att-ai-foundry/1.0") or it is blocked before the key is checked.
+//   ("telecom-project/1.0") or it is blocked before the key is checked.
 // * Model llama-3.1-8b-instant is NOT available on this account (Groq
 //   returns 404 model_not_found). Use openai/gpt-oss-120b only.
 //
@@ -17,7 +17,7 @@ import type { StairLeaf } from './types';
 
 export const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
 export const GROQ_MODEL = 'openai/gpt-oss-120b';
-export const GROQ_USER_AGENT = 'att-ai-foundry/1.0';
+export const GROQ_USER_AGENT = 'telecom-project/1.0';
 export const GROQ_TIMEOUT_MS = 20_000;
 
 /** Read an env var without Node types (this file is also bundled for the

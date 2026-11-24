@@ -332,7 +332,7 @@ function planRetention(state, _c, customer, result, add, opts = {}) {
 // src/lib/groq.ts
 var GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 var GROQ_MODEL = "openai/gpt-oss-120b";
-var GROQ_USER_AGENT = "att-ai-foundry/1.0";
+var GROQ_USER_AGENT = "telecom-project/1.0";
 var GROQ_TIMEOUT_MS = 2e4;
 function getEnv(name) {
   const proc = globalThis.process;

@@ -7,7 +7,7 @@
 //   GROQ_API_KEY      optional — required only for live-LLM mode. Groq
 //                     Console (console.groq.com), free tier, no card.
 //   ATT_API_BASE_URL  optional — required only in `att` datasource mode.
-//                     From the AT&T fulfilment team (CRM/billing/usage API).
+//                     From the the carrier's fulfilment team (CRM/billing/usage API).
 //   ATT_API_KEY       optional — required only in `att` datasource mode.
 //                     Bearer token from the fulfilment team. Rotate it
 //                     like any service credential; never commit it.
@@ -15,9 +15,9 @@
 //                     store. Nothing reads it yet; the demo stores state in
 //                     the browser (localStorage) and the seed file.
 //   DATASOURCE        optional, default `seed`. `seed` = synthetic demo
-//                     data; `att` = live AT&T adapter (see datasource.ts).
+//                     data; `att` = live carrier adapter (see datasource.ts).
 //   AUTH_ENABLED      optional, default `false`. `true` turns on the login
-//                     gate (see auth.ts). Production uses AT&T Entra ID.
+//                     gate (see auth.ts). Production uses Entra ID.
 //   AUTH_PROVIDER / AUTH_CLIENT_ID / AUTH_ISSUER_URL
 //                     optional — required only when AUTH_ENABLED=true.
 //                     The Entra ID app registration from the fulfilment team.
@@ -63,7 +63,7 @@ export function loadConfig(): AppConfig {
 }
 
 /** Missing REQUIRED variables for the selected mode. Empty = the app may
- *  start. Demo mode requires nothing; `att` mode requires the AT&T
+ *  start. Demo mode requires nothing; `att` mode requires the carrier
  *  connection; auth-on requires the IdP registration. */
 export function validateConfig(cfg: AppConfig): string[] {
   const missing: string[] = [];

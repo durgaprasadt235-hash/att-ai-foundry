@@ -53,7 +53,7 @@ limit. The agent says why, and the case stays open for a human.
 
 1. **Find and confirm the customer.** The operator searches by name,
    phone number, account number, email, or customer ID. The customer is
-   then verified the way AT&T verifies today: name and number first,
+   then verified the way a telecom carrier verifies today: name and number first,
    then the 6-digit account PIN, or a one-time code sent to the
    registered phone or email — only after the customer confirms the
    registered email matches.
@@ -114,12 +114,12 @@ it does not warn.
   is not, the deterministic engine runs instead and says so. The human
   approval step gates everything either way.
 - **Data source switch** — the app runs on a built-in dataset or an
-  uploaded file today; pointing it at real AT&T systems is a
+  uploaded file today; pointing it at real carrier systems is a
   configuration change plus the fulfilment team's access, not a rebuild.
 
 ## Honest limits
 
-- No real AT&T internal system is connected. All data in the demo is
+- No real carrier internal system is connected. All data in the demo is
   synthetic, and the app says so.
 - The live language model is optional; without its key the agent is
   deterministic code.

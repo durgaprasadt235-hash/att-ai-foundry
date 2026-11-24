@@ -1,6 +1,6 @@
 """Auth boundary — mirrors src/lib/auth.ts.
 
-Clearly-labelled placeholder, DISABLED by default. Production uses AT&T
+Clearly-labelled placeholder, DISABLED by default. Production uses
 Entra ID (OAuth 2.0 / OpenID Connect). This module only answers one
 question honestly: is the login gate on, and is it actually configured?
 It never performs a fake login.
@@ -24,7 +24,7 @@ def auth_status(cfg: AppConfig | None = None) -> dict:
             "configured": False,
             "provider": cfg.auth_provider,
             "missing": [],
-            "note": "Login gate is off (demo mode). Production uses AT&T "
+            "note": "Login gate is off (demo mode). Production uses "
                     "Entra ID — enable with AUTH_ENABLED=true once the "
                     "Entra ID app registration exists.",
         }
@@ -48,7 +48,7 @@ def auth_status(cfg: AppConfig | None = None) -> dict:
         "configured": True,
         "provider": cfg.auth_provider,
         "missing": [],
-        "note": f"Auth is enabled for {cfg.auth_provider} (AT&T Entra ID "
+        "note": f"Auth is enabled for {cfg.auth_provider} (Entra ID "
                 "in production). The OAuth callback handler is not yet "
                 "implemented — sign-in is a placeholder until the "
                 "fulfilment team wires it (docs/DEPLOYMENT.md step 4).",

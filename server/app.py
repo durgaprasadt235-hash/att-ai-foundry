@@ -238,10 +238,10 @@ def health() -> dict:
             "status": "seed" if CONFIG.datasource == "seed"
                       else "configured" if att_configured else "not_configured",
             "detail": "Synthetic demo data (seed). Set DATASOURCE=att with "
-                      "ATT_API_BASE_URL + ATT_API_KEY for the live AT&T "
+                      "ATT_API_BASE_URL + ATT_API_KEY for the live carrier "
                       "adapter." if CONFIG.datasource == "seed" else
-                      "Live AT&T adapter configured. Data loads fail "
-                      "honestly if the AT&T API is unreachable — never "
+                      "Live carrier adapter configured. Data loads fail "
+                      "honestly if the carrier API is unreachable — never "
                       "falls back to seed." if att_configured else
                       "att mode selected but ATT_API_BASE_URL / "
                       "ATT_API_KEY are missing. Data loads will fail "
@@ -264,7 +264,7 @@ def health() -> dict:
 @app.get("/datasource/status")
 def datasource_status() -> dict:
     """Probe the configured datasource and report honestly. In `att` mode
-    this actually calls the AT&T API (one cheap GET); a failure is
+    this actually calls the carrier API (one cheap GET); a failure is
     reported, never masked with seed data."""
     ds = datasource_from_config(CONFIG)
     if ds.mode == "seed":
@@ -277,7 +277,7 @@ def datasource_status() -> dict:
     return {"mode": "att",
             "status": "reachable" if probe["reachable"] else "unreachable",
             "detail": probe["error"] or
-                      f"AT&T API reachable ({probe['customers']} customers).",
+                      f"carrier API reachable ({probe['customers']} customers).",
             "customers": probe["customers"]}
 
 

@@ -1,7 +1,7 @@
 # Telecom Project — Enterprise Customer & Operational Data Platform
 
-Director-grade working prototype for **AJ DiLeo, AI Director @ AT&T, AI Foundry**.
-Built by Durga Prasad Thoorpati (Sr. Software Engineer) from the AT&T project:
+Director-grade working prototype for a telecom AI team.
+Built by Durga Prasad Thoorpati (Sr. Software Engineer) —
 *Enterprise Customer & Operational Data Platform with GenAI Integration*.
 
 ## What it is
@@ -34,7 +34,7 @@ serves deterministic fallback without calling Groq at all. `/api/health`
 reports `llm_live: true` **only** when a live Groq call actually succeeded
 — a configured key alone is reported as configured, not live.
 
-**Not live:** there is **no real AT&T internal API, and all demo data is
+**Not live:** there is **no real carrier internal API, and all demo data is
 synthetic** (invented names, accounts, invoices). That honesty is deliberate:
 a demo that pretends to be production is exactly the kind of pilot that
 delivers no measurable return. The **Production readiness panel** on the
@@ -96,7 +96,7 @@ its own row.
 
 ## Find & confirm customer — where every call starts
 
-"User" here means the **operator** using this dashboard, not the AT&T
+"User" here means the **operator** using this dashboard, not the carrier
 customer. The operator finds the customer and can change that person's
 billing, usage or services — so before anything changes, the app must know
 **whose** data it is, and verify it from the customer end. That is the
@@ -118,7 +118,7 @@ the top of the Customers view:
   email or customer ID, with the match reason shown per result
   ("matched phone", "matched account"). Empty query lists the caseload,
   capped at 50 rows with the total shown.
-- **Step 2 — Verify, the way AT&T does it today:** name + phone number
+- **Step 2 — Verify, the way a telecom carrier does it today:** name + phone number
   first, then the **6-digit account PIN** the customer created. If they
   don't have it, a one-time code goes to the registered phone/email —
   but only after the customer confirms the registered email matches the
@@ -140,10 +140,9 @@ the top of the Customers view:
 - **Simulate incoming call (611)** — picks a customer and pre-fills the
   search with their phone number, the way dialling 611 identifies the
   calling line before the agent speaks. Clearly labelled as a simulation.
-- **How AT&T finds a customer today** — documented below: the real
-  channels (611, 1-800-331-0500 wireless, 1-800-288-2020 internet/home
-  phone, 1-800-901-9878 prepaid, 1-800-321-2000 business, myAT&T app,
-  live chat, stores) and the identifiers (calling phone number first,
+- **How a carrier finds a customer today** — documented below: the real
+  channels (611, carrier support lines for wireless, internet/home
+  phone, prepaid and business, the carrier app, live chat, stores) and the identifiers (calling phone number first,
   then account number, then name + phone, verified with the 6-digit
   account PIN the customer created — or, if they don't have it, a
   one-time code sent to the registered phone/email after the customer
@@ -332,7 +331,7 @@ not chunk-based RAG:
 ## Architecture (text diagram)
 
 ```
-Sources (CRM, billing, usage — synthetic seed, or live AT&T adapter)
+Sources (CRM, billing, usage — synthetic seed, or live carrier adapter)
         │  ETL pipelines (validate + ingest, exceptions listed)
         ▼
 Customer 360 (customers + ledger + usage + tickets + cases)
@@ -376,15 +375,15 @@ missing REQUIRED variable for the selected mode instead of running
 half-configured.
 
 **Data-source switch** (`src/lib/datasource.ts`, `server/datasource.py`):
-`seed` (default, synthetic demo data) or `att` (live AT&T adapter: Bearer
+`seed` (default, synthetic demo data) or `att` (live carrier adapter: Bearer
 auth, 10s timeout, retry once, maps CRM/billing/usage payloads onto the
 existing record types). `att` mode **fails honestly** — an unreachable or
-bad AT&T API is reported, never silently replaced with seed data. Mode is
+bad carrier API is reported, never silently replaced with seed data. Mode is
 selected by `DATASOURCE` and shown in `/api/health` and the Production
 readiness panel.
 
 **Auth boundary** (`src/lib/auth.ts`, `server/auth.py`): a Google/Entra
-OAuth login gate, **disabled by default**. Production uses AT&T Entra ID.
+OAuth login gate, **disabled by default**. Production uses Entra ID.
 Enabled without config it shows an honest "auth not configured" state —
 never a fake login. The OAuth callback is not yet implemented, so the
 configured gate is a clearly-labelled placeholder (disabled sign-in button).
@@ -447,7 +446,7 @@ limiting belongs at the edge).
 | `POST /evals/release-gate` | POST | `{ state }` | `{ released, scorePct, failures }` — the gate **blocks** the release when the suite fails |
 | `GET /medallion`, `GET /medallion/spark-job` | GET | — | Bronze → Silver → Gold snapshot; Databricks/Spark job outline |
 | `POST /pipelines/validate` | POST | `{ state, pipeline_id }` | per-pipeline validation (that pipeline's source only) |
-| `GET /datasource/status` | GET | — | datasource probe (in `att` mode this really calls the AT&T API) |
+| `GET /datasource/status` | GET | — | datasource probe (in `att` mode this really calls the carrier API) |
 | `GET /metrics` | GET | — | record counts per layer + endpoint counters |
 | `GET /events` | GET | — | append-only event feed (newest first) |
 | `GET /tools` | GET | — | per-tool contracts (input schema, timeout, retry, idempotency) |
@@ -479,7 +478,7 @@ count in the run trace. Rate limits: the demo-grade in-memory guard
 `Retry-After`. Errors are structured `{ error, reason }`, never a
 silent success. Access control: the demo runs open on synthetic data
 with the auth gate off by default; production calls go through the Entra
-ID gate and the AT&T API key.
+ID gate and the carrier API key.
 
 ## Observability
 
@@ -525,7 +524,7 @@ it is **not** a durable bus.
   consecutive Groq failures the breaker opens for 60s — no Groq call is
   attempted, fallback is served; after the cooldown one trial call is
   allowed (half-open). Reported in `/api/health` as `llm_circuit`.
-- **Timeouts:** Groq 20s, AT&T adapter 10s, deterministic tools 5s.
+- **Timeouts:** Groq 20s, carrier adapter 10s, deterministic tools 5s.
 - **Retries:** once, on transient failures only — never on validation errors.
 - **Backpressure:** Medallion batches are bounded (1000 new records max;
   the rest are deferred to the next batch, never dropped).
@@ -594,7 +593,7 @@ tool in the loop, not a substitute for the loop.
   or exported locally). Without it the agent is deterministic code, not a
   model — and it says so in every run trace. Groq never executes anything:
   it only picks a STAIR leaf from the allowlist and drafts a summary.
-- No API key, no real AT&T APIs, no real customer data. The `att`
+- No API key, no real carrier APIs, no real customer data. The `att`
   datasource mode and the Entra ID gate are the two fulfilment-team
   connections still needed — both are built, both fail honestly until
   connected, and `docs/DEPLOYMENT.md` lists the exact steps.
@@ -630,13 +629,13 @@ tool in the loop, not a substitute for the loop.
 src/lib/engine.ts      deterministic agent engine (TS) — plan by case type
 src/lib/agent.ts       explicit agent state machine (states, transitions, trace check)
 src/lib/tool-contracts.ts  per-tool contracts (input schema, timeout, retry, idempotency)
-src/lib/groq.ts        live Groq client (TS) — leaf pick + summary, User-Agent att-ai-foundry/1.0, circuit breaker
+src/lib/groq.ts        live Groq client (TS) — leaf pick + summary, User-Agent telecom-project/1.0, circuit breaker
 src/lib/medallion.ts   Medallion Bronze → Silver → Gold (TS) — snapshot, lineage, failure cards, incremental bounded batches
 src/lib/stair.ts       STAIR retriever (TS) + eval set + measured recall (STAIR + chunk baseline, per query)
 src/lib/seed.ts        synthetic seed: 20 customers, 12 cases, 8 docs, 3 trees
 src/lib/types.ts       record types (incl. Medallion snapshot / quarantine / failure card, AuditEntry, AgentRun)
 src/lib/config.ts      single config surface — env vars only, required-vs-optional, fail loudly
-src/lib/datasource.ts  data-source switch: seed | att (live AT&T adapter, fails honestly)
+src/lib/datasource.ts  data-source switch: seed | att (live carrier adapter, fails honestly)
 src/lib/auth.ts        auth boundary — Entra ID gate, disabled by default, honest "not configured"
 src/lib/redact.ts      PII redaction — masks phone/email in logs, traces, audit, events
 src/lib/events.ts      event feed types — the Kafka/SNS seam
@@ -656,7 +655,7 @@ docs/JD_COVERAGE.md    every JD bullet → file + how to verify it
 server/engine.py       Python port of the agent engine (live_llm mode included) + execute_approved
 server/agent.py        explicit agent state machine (Python mirror)
 server/tool_contracts.py  per-tool contracts (Python mirror)
-server/groq_client.py  live Groq client (Python) — leaf pick + summary, User-Agent att-ai-foundry/1.0, circuit breaker
+server/groq_client.py  live Groq client (Python) — leaf pick + summary, User-Agent telecom-project/1.0, circuit breaker
 server/medallion.py    Medallion Bronze → Silver → Gold (Python) + Databricks/Spark job reference
 server/stair_retriever.py  STAIR (Python) with trie allowlist + chunk baseline eval
 server/config.py       single config surface (Python mirror)

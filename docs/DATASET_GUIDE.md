@@ -164,7 +164,7 @@ cleanser (`server/cleanse.py`) and the browser cleanser
 |---|---|---|
 | 1. First call | Sample file uploaded, agent tested on your records | Minutes, on the call |
 | 2. Sample review | Your team checks the validation report, the agent's traces, and the audit trail against your own records | Same week |
-| 3. Access + security | AT&T security review, Entra ID app registration, API credentials issued, network access agreed | Days to weeks — owned by the fulfilment team, not by this demo |
+| 3. Access + security | carrier security review, Entra ID app registration, API credentials issued, network access agreed | Days to weeks — owned by the fulfilment team, not by this demo |
 | 4. Live adapter | Point `DATASOURCE=att` at the real CRM / billing / usage APIs (`ATT_API_BASE_URL` + `ATT_API_KEY`); the adapter maps your payloads onto the same Customer / Ledger / Usage types the sample used | Days, once access exists — no agent code changes |
 | 5. Production database | Provision Postgres, set `DATABASE_URL`, move state out of the browser | Days |
 | 6. Auth | Enable the login gate (`AUTH_ENABLED=true`) with the Entra ID registration | Days |

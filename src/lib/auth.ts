@@ -1,6 +1,6 @@
 // Auth boundary — clearly-labelled placeholder, DISABLED by default.
 //
-// Production uses AT&T Entra ID (OAuth 2.0 / OpenID Connect). This file
+// Production uses Entra ID (OAuth 2.0 / OpenID Connect). This file
 // only answers one question honestly: is the login gate on, and is it
 // actually configured? It never performs a fake login.
 //
@@ -24,7 +24,7 @@ import { loadConfig } from './config';
 export interface AuthStatus {
   enabled: boolean;
   configured: boolean;
-  /** IdP flavour. Production: "entra-id" (AT&T Entra ID). */
+  /** IdP flavour. Production: "entra-id" (Entra ID). */
   provider: string;
   /** Which required vars are still missing (empty when configured). */
   missing: string[];
@@ -40,7 +40,7 @@ export function getAuthStatus(): AuthStatus {
       configured: false,
       provider: cfg.authProvider,
       missing: [],
-      note: 'Login gate is off (demo mode). Production uses AT&T Entra ID — enable with AUTH_ENABLED=true once the Entra ID app registration exists.',
+      note: 'Login gate is off (demo mode). Production uses Entra ID — enable with AUTH_ENABLED=true once the Entra ID app registration exists.',
     };
   }
   const missing: string[] = [];
@@ -60,7 +60,7 @@ export function getAuthStatus(): AuthStatus {
     configured: true,
     provider: cfg.authProvider,
     missing: [],
-    note: `Auth is enabled for ${cfg.authProvider} (AT&T Entra ID in production). The OAuth callback handler is not yet implemented — sign-in is a placeholder until the fulfilment team wires it (docs/DEPLOYMENT.md step 4).`,
+    note: `Auth is enabled for ${cfg.authProvider} (Entra ID in production). The OAuth callback handler is not yet implemented — sign-in is a placeholder until the fulfilment team wires it (docs/DEPLOYMENT.md step 4).`,
   };
 }
 

@@ -1,9 +1,9 @@
 // Customer lookup — the "Find customer" search.
 //
-// This is where a real AT&T call starts: the agent's first step is
+// This is where a real carrier call starts: the agent's first step is
 // Customer 360 (see engine.customer360, the RETRIEVE_360 step), and
-// before that someone has to find the account. Today AT&T finds it
-// from the calling phone number first (dialling 611 from an AT&T phone
+// before that someone has to find the account. Today a carrier finds it
+// from the calling phone number first (dialling 611 from a carrier phone
 // identifies the line before the agent speaks), otherwise from the
 // account number (top-right of the bill), or from name + address +
 // phone, verified with the 6-digit account PIN the customer created; without it, a one-time code is sent to the registered phone/email only after the customer confirms the registered email matches.

@@ -3,13 +3,13 @@
 **Product:** Telecom Project — Enterprise Task-Execution Agent Platform (prototype)
 **Version:** 1.0 — 2026-11-21
 **Author:** Durga Prasad Thoorpati
-**Audience:** AJ DiLeo, AI Director @ AT&T, AI Foundry; the AI Foundry fulfilment team
+**Audience:** The telecom AI team; the fulfilment team
 **Repository:** https://github.com/durgaprasadt235-hash/att-ai-foundry
 **Live demo:** https://att-ai-foundry.vercel.app/
 
 > **Status of this document:** This PRD describes a working prototype that is
 > production-ready in code structure, with clearly marked integration points.
-> It is **not** connected to any real AT&T internal system. All demo data is
+> It is **not** connected to any real carrier internal system. All demo data is
 > synthetic. The fulfilment team onboards it by connecting the real systems
 > listed in §11 — a configuration exercise, not a rebuild.
 
@@ -59,7 +59,7 @@ be: *this is nailed — onboard it, connect the real systems, ship it.*
 
 **Non-goals**
 
-- No real AT&T internal API, CRM, or billing system is connected in this
+- No real carrier internal API, CRM, or billing system is connected in this
   prototype (see §11 — that is the fulfilment team's step).
 - No autonomous execution without approval. The agent proposes; a human
   approves; the system executes and verifies.
@@ -71,7 +71,7 @@ be: *this is nailed — onboard it, connect the real systems, ship it.*
 | User | Needs |
 |---|---|
 | Customer-service agent / operator | Run a case, see the agent's reasoning and policy citation, approve or reject, see the verified result |
-| AI Foundry director (AJ DiLeo) | See measurable outcomes, eval scores, and what is live vs what still needs connecting |
+| Telecom AI director | See measurable outcomes, eval scores, and what is live vs what still needs connecting |
 | Fulfilment team | Connect real APIs, keys, auth, and database; run the deployment |
 | Data engineer / single operator | Run Medallion pipelines, clear quarantine, fix failures with Copilot |
 
@@ -87,7 +87,7 @@ plan → Customer 360 → STAIR grounding → validate → propose
 
 | Step | What happens | Failure behaviour |
 |---|---|---|
-| **Find & confirm customer (step 0)** | Before the workflow starts, the operator finds and confirms the account with the fixed "Find & confirm customer" form (top of Dashboard and Customers view). Customers load A–Z by name at every load path; no customer is ever pre-selected and the intake picker starts empty. Step 1 identify by name, name + number, number, account, email or ID, with the match reason shown per result. Step 2 verify the way AT&T does today: name + phone, then the 6-digit account PIN the customer created; without the PIN, a one-time code is sent to the registered phone/email only after the customer confirms the registered email matches. Step 3 confirmed banner (method + time) — "Change customer" clears it and the next customer must be verified again. The confirmed customer becomes the context: their 360 opens and the intake form is pre-filled. "Simulate incoming call (611)" demonstrates the phone-first path. The lookup searches whatever dataset is loaded (seed or uploaded file); in production it runs against the CRM through the `att` adapter. Demo honesty: no PIN is stored and no real code is sent — verification is an operator attestation (method + timestamp), never presented as a cryptographic check. Verification is recorded, not enforced yet: the 360 shows "Verified via PIN at <time>" or "Not verified", and every action's audit entry carries the verification status. TODO (future): enforce verified-before-change — block billing/usage/service changes until the customer is verified in this session. | No match → empty result list, nothing invented; a 1,000-customer list caps at 50 rows with the total shown; OTP refused when the typed email does not match the registered email |
+| **Find & confirm customer (step 0)** | Before the workflow starts, the operator finds and confirms the account with the fixed "Find & confirm customer" form (top of Dashboard and Customers view). Customers load A–Z by name at every load path; no customer is ever pre-selected and the intake picker starts empty. Step 1 identify by name, name + number, number, account, email or ID, with the match reason shown per result. Step 2 verify the way a telecom carrier does today: name + phone, then the 6-digit account PIN the customer created; without the PIN, a one-time code is sent to the registered phone/email only after the customer confirms the registered email matches. Step 3 confirmed banner (method + time) — "Change customer" clears it and the next customer must be verified again. The confirmed customer becomes the context: their 360 opens and the intake form is pre-filled. "Simulate incoming call (611)" demonstrates the phone-first path. The lookup searches whatever dataset is loaded (seed or uploaded file); in production it runs against the CRM through the `att` adapter. Demo honesty: no PIN is stored and no real code is sent — verification is an operator attestation (method + timestamp), never presented as a cryptographic check. Verification is recorded, not enforced yet: the 360 shows "Verified via PIN at <time>" or "Not verified", and every action's audit entry carries the verification status. TODO (future): enforce verified-before-change — block billing/usage/service changes until the customer is verified in this session. | No match → empty result list, nothing invented; a 1,000-customer list caps at 50 rows with the total shown; OTP refused when the typed email does not match the registered email |
 | Plan | Agent reads the case and selects the workflow (billing / provisioning / outage / plan / retention) | Unknown case type fails honestly: "no agent workflow for this type" |
 | Customer 360 | Loads the customer, ledger, and usage from the data source — the same 360 the lookup opened | Unknown customer / missing record fails honestly |
 | STAIR grounding | Retrieves the exact policy leaf from the structured policy tree, cited by full path (e.g. `Billing Policy > Credits > Duplicate Charges §4.2`) | No matching policy → "Not found in policy", no answer invented |
@@ -261,19 +261,19 @@ engineering team required for day-to-day operation.
 | A14 | Production-readiness panel | Home view |
 | A15 | Synthetic seed data, fully reconciled (20 customers, 66 ledger, 20 usage, 12 cases, 8 policy docs) | `src/lib/seed.ts`, `server/seed.json` |
 
-### Needed from the fulfilment team / AT&T
+### Needed from the fulfilment team
 
 | # | Requirement | Owner | Notes |
 |---|---|---|---|
-| N1 | Real AT&T CRM API endpoint + credentials | Fulfilment team | Adapter expects customer records mapped to the `Customer` type; see `src/lib/datasource.ts` |
-| N2 | Real AT&T billing/ledger API endpoint + credentials | Fulfilment team | Maps to the `Ledger` type; duplicate-detection rules are already implemented |
-| N3 | Real AT&T usage/telemetry API endpoint + credentials | Fulfilment team | Maps to the `Usage` type |
+| N1 | Real carrier CRM API endpoint + credentials | Fulfilment team | Adapter expects customer records mapped to the `Customer` type; see `src/lib/datasource.ts` |
+| N2 | Real carrier billing/ledger API endpoint + credentials | Fulfilment team | Maps to the `Ledger` type; duplicate-detection rules are already implemented |
+| N3 | Real carrier usage/telemetry API endpoint + credentials | Fulfilment team | Maps to the `Usage` type |
 | N4 | Entra ID / OAuth configuration (tenant, client id, scopes) | Fulfilment team | Enables the auth gate; demo runs with it disabled |
 | N5 | Production database (Neon/Postgres `DATABASE_URL`) | Fulfilment team | Replaces the in-memory/seed store; schema is the 40-table design in the repo |
 | N6 | LLM key — Groq (`GROQ_API_KEY`) or Azure OpenAI | Fulfilment team | Free-tier Groq works for the demo; Azure OpenAI is the enterprise path |
 | N7 | Vercel project env vars (Production + Preview) + redeploy | Fulfilment team | `GROQ_API_KEY`, `ATT_API_BASE_URL`, `ATT_API_KEY`, `DATABASE_URL`, `DATASOURCE=att`, `AUTH_ENABLED=true` |
-| N8 | Policy documents in STAIR tree format | Fulfilment team | Real AT&T policy docs replace the 8 synthetic docs; each needs a table of contents |
-| N9 | Fulfilment-team decisions: credit-approval thresholds, supervisor escalation, outage-confirmation source | AT&T business | Current values ($25 goodwill, >$100 supervisor, >4h outage, $100 provisioning cap) are seed defaults |
+| N8 | Policy documents in STAIR tree format | Fulfilment team | Real carrier policy docs replace the 8 synthetic docs; each needs a table of contents |
+| N9 | Fulfilment-team decisions: credit-approval thresholds, supervisor escalation, outage-confirmation source | carrier business | Current values ($25 goodwill, >$100 supervisor, >4h outage, $100 provisioning cap) are seed defaults |
 | N10 | Load / scale validation at production volume | Fulfilment team | Petabyte design is architectural; validate with real volume before full rollout |
 
 **Onboarding is 3 steps:** (1) set the env vars in §11-N7; (2) point
@@ -286,7 +286,7 @@ engineering team required for day-to-day operation.
 - Secrets only via environment variables. No secret anywhere in code,
   chat, or the repo (verified by scan).
 - Auth boundary: Entra/OAuth gate, disabled by default in demo, enabled
-  by env flag. Production uses AT&T Entra ID. A login is never faked.
+  by env flag. Production uses Entra ID. A login is never faked.
 - Human approval gates every consequential action; approvals are
   single-use and logged.
 - Idempotency: a repeat run returns the original result, never a second
@@ -352,7 +352,7 @@ engineering team required for day-to-day operation.
 
 ## 16. Honest limits
 
-- No real AT&T internal API is connected; all demo data is synthetic.
+- No real carrier internal API is connected; all demo data is synthetic.
 - Petabyte scale is architectural, not measured in this demo.
 - `llama-3.1-8b-instant` is not available on Groq — use
   `openai/gpt-oss-120b` only.

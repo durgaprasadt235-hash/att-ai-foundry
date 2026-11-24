@@ -345,7 +345,7 @@ export default function App() {
   // not configured" state — never a fake login. When configured, the gate
   // is a clearly-labelled placeholder: the OAuth callback is not yet
   // implemented, so the sign-in button is disabled and says so.
-  // Production uses AT&T Entra ID.
+  // Production uses Entra ID.
   if (health?.auth?.enabled) {
     const auth = health.auth;
     if (!auth.configured) {
@@ -416,7 +416,7 @@ export default function App() {
         {view === 'system' && <SystemView state={state} mutate={mutate} audit={audit} emit={emit} onReset={() => { const fresh = resetState(); setState(fresh); stateRef.current = fresh; setNotice('Demo data reset to the seeded state.'); }} />}
         {view === 'about' && <OverviewView />}
         <footer>
-          Demo: no real AT&amp;T API; all data is synthetic. Groq runs only when GROQ_API_KEY is set, otherwise the agent is deterministic. Baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case; agent cost {money(AGENT_COST_USD)} per run is a demo assumption, not a measured bill.
+          Demo: no real carrier API; all data is synthetic. Groq runs only when GROQ_API_KEY is set, otherwise the agent is deterministic. Baseline: {MANUAL_MINUTES} min / {money(MANUAL_COST_USD)} per case; agent cost {money(AGENT_COST_USD)} per run is a demo assumption, not a measured bill.
         </footer>
       </div>
     </div>
@@ -513,7 +513,7 @@ function ProductionReadinessPanel({ health, state }: { health: HealthStatus | nu
   ];
   const todos: string[] = [];
   if (health && !health.llm_configured) todos.push('Set GROQ_API_KEY for live-LLM mode.');
-  if (health && health.datasource.mode === 'seed') todos.push('Connect ATT_API_BASE_URL + ATT_API_KEY and set DATASOURCE=att for live AT&T data.');
+  if (health && health.datasource.mode === 'seed') todos.push('Connect ATT_API_BASE_URL + ATT_API_KEY and set DATASOURCE=att for live carrier data.');
   if (health && !health.db.configured) todos.push('Provision Postgres and set DATABASE_URL when the fulfilment team wires the store (reserved today).');
   if (health && !health.auth.enabled) todos.push('Register the Entra ID app and set AUTH_ENABLED=true + AUTH_CLIENT_ID + AUTH_ISSUER_URL when login is required.');
   if (!lastEval) todos.push('Run the evaluation suite (System → Evaluations).');

@@ -7,7 +7,7 @@ of the reference backend.
 Two facts that cost a morning to learn, so they are written down here:
 * Groq (behind Cloudflare) returns 403 error code 1010 for the default
   Python-urllib User-Agent. Every request MUST send a real User-Agent
-  ("att-ai-foundry/1.0") or it is blocked before the key is even checked.
+  ("telecom-project/1.0") or it is blocked before the key is even checked.
   The stored key was fine all along; the User-Agent was the bug.
 * Model llama-3.1-8b-instant is NOT available on this account (Groq returns
   404 model_not_found). Use openai/gpt-oss-120b only.
@@ -27,7 +27,7 @@ import urllib.request
 
 BASE_URL = "https://api.groq.com/openai/v1"
 MODEL = "openai/gpt-oss-120b"
-USER_AGENT = "att-ai-foundry/1.0"
+USER_AGENT = "telecom-project/1.0"
 TIMEOUT_SECONDS = 20
 
 

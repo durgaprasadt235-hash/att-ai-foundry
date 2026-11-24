@@ -28,10 +28,10 @@ export default async function handler(req: any, res: any): Promise<void> {
       datasource: {
         mode: 'seed',
         status: 'seed',
-        detail: 'Synthetic demo data (seed). Set DATASOURCE=att with ATT_API_BASE_URL + ATT_API_KEY for the live AT&T adapter.',
+        detail: 'Synthetic demo data (seed). Set DATASOURCE=att with ATT_API_BASE_URL + ATT_API_KEY for the live carrier adapter.',
       },
       db: { mode: 'seed', configured: false, detail: 'No live database. Demo state lives in the browser (localStorage) and the seed file.' },
-      auth: { enabled: false, configured: false, provider: 'entra-id', missing: [], note: 'Login gate is off (demo mode). Production uses AT&T Entra ID.' },
+      auth: { enabled: false, configured: false, provider: 'entra-id', missing: [], note: 'Login gate is off (demo mode). Production uses Entra ID.' },
       realAttSystems: false,
       demoData: 'synthetic',
       note: 'Self-contained health handler (no shared imports) — diagnostic build to isolate the Vercel function crash.',

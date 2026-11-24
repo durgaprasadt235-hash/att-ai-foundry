@@ -14,7 +14,7 @@
 // production contract is 60/min at the edge. Access control: the demo
 // runs open (synthetic data, auth gate off by default); production
 // calls go through the Entra ID gate (see auth.ts) and the API key
-// (ATT_API_KEY) on the AT&T adapter.
+// (ATT_API_KEY) on the carrier adapter.
 
 export interface ToolContract {
   tool: string;

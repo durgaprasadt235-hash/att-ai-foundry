@@ -2,11 +2,11 @@
 
 Two modes, one interface:
   seed — the synthetic demo data in seed.json. Default.
-  att  — live AT&T adapter: reads CRM / billing / usage payloads from
+  att  — live carrier adapter: reads CRM / billing / usage payloads from
          ATT_API_BASE_URL with ATT_API_KEY (Bearer), and maps them onto
          the existing customer / ledger / usage shapes.
 
-`att` mode FAILS HONESTLY: if the AT&T API is unreachable, returns an
+`att` mode FAILS HONESTLY: if the carrier API is unreachable, returns an
 error, or sends a record that cannot be mapped, load_state() raises
 DatasourceError — it NEVER silently falls back to seed/fake data.
 Mode is selected by the DATASOURCE env var (default `seed`) — see config.py.
@@ -56,7 +56,7 @@ def _req_str(raw: dict, record_id: str, *names: str) -> str:
     value = _pick(raw, *names)
     if not isinstance(value, str) or value == "":
         raise DatasourceError(
-            f"AT&T record {record_id} is missing required field {names[0]}")
+            f"carrier record {record_id} is missing required field {names[0]}")
     return value
 
 
@@ -66,7 +66,7 @@ def _req_num(raw: dict, record_id: str, *names: str) -> float:
         number = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         raise DatasourceError(
-            f"AT&T record {record_id} is missing required numeric field "
+            f"carrier record {record_id} is missing required numeric field "
             f"{names[0]}") from None
     return number
 
@@ -160,7 +160,7 @@ class SeedDatasource:
 
 
 class AttDatasource:
-    """Live AT&T adapter. One GET per collection, Bearer auth, 10s
+    """Live carrier adapter. One GET per collection, Bearer auth, 10s
     timeout, one retry on network/5xx. Any failure raises DatasourceError.
     No fallback to seed — ever."""
 
@@ -191,21 +191,21 @@ class AttDatasource:
                 # 4xx is a real client error (bad key, bad path) — no retry.
                 if e.code < 500:
                     raise DatasourceError(
-                        f"AT&T API {path} returned HTTP {e.code}: {detail}",
+                        f"carrier API {path} returned HTTP {e.code}: {detail}",
                         status=e.code) from e
                 last_error = e
             except (urllib.error.URLError, TimeoutError, OSError) as e:
                 last_error = e
             time.sleep(0.2)  # brief pause before the one retry
         raise DatasourceError(
-            f"AT&T API unreachable at {self.base_url} after "
+            f"carrier API unreachable at {self.base_url} after "
             f"{ATT_MAX_ATTEMPTS} attempts: {last_error}")
 
     @staticmethod
     def _as_list(value, path: str) -> list:
         if not isinstance(value, list):
             raise DatasourceError(
-                f"AT&T API {path} did not return a JSON array")
+                f"carrier API {path} did not return a JSON array")
         return value
 
     def load_state(self) -> dict:

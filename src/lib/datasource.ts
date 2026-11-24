@@ -2,11 +2,11 @@
 // server/datasource.py (same modes, same endpoints, same mapping rules).
 //
 //   seed — the current synthetic demo data (src/lib/seed.ts). Default.
-//   att  — live AT&T adapter: reads CRM / billing / usage payloads from
+//   att  — live carrier adapter: reads CRM / billing / usage payloads from
 //          ATT_API_BASE_URL with ATT_API_KEY (Bearer), and maps them onto
 //          the existing Customer / LedgerEntry / UsageRecord types.
 //
-// `att` mode FAILS HONESTLY: if the AT&T API is unreachable, returns an
+// `att` mode FAILS HONESTLY: if the carrier API is unreachable, returns an
 // error, or sends a record that cannot be mapped, loadDatasourceState()
 // throws DatasourceError — it NEVER silently falls back to seed/fake data.
 // A silent fallback would be exactly the kind of fake-live demo this
@@ -31,7 +31,7 @@ export class DatasourceError extends Error {
   }
 }
 
-/** Timeout per AT&T request (10s) and retries (one retry on a network
+/** Timeout per carrier request (10s) and retries (one retry on a network
  *  error or a 5xx — never on a 4xx, which is a real client error). */
 export const ATT_TIMEOUT_MS = 10_000;
 export const ATT_MAX_ATTEMPTS = 2;
@@ -55,18 +55,18 @@ function pick(raw: Record<string, unknown>, ...names: string[]): unknown {
 
 function reqString(raw: Record<string, unknown>, id: string, ...names: string[]): string {
   const v = pick(raw, ...names);
-  if (typeof v !== 'string' || v === '') throw new DatasourceError(`AT&T record ${id} is missing required field ${names[0]}`);
+  if (typeof v !== 'string' || v === '') throw new DatasourceError(`carrier record ${id} is missing required field ${names[0]}`);
   return v;
 }
 
 function reqNumber(raw: Record<string, unknown>, id: string, ...names: string[]): number {
   const v = pick(raw, ...names);
   const n = typeof v === 'string' ? Number(v) : v;
-  if (typeof n !== 'number' || Number.isNaN(n)) throw new DatasourceError(`AT&T record ${id} is missing required numeric field ${names[0]}`);
+  if (typeof n !== 'number' || Number.isNaN(n)) throw new DatasourceError(`carrier record ${id} is missing required numeric field ${names[0]}`);
   return n;
 }
 
-/** Map one AT&T CRM customer onto Customer. Unknown plans/statuses are
+/** Map one carrier CRM customer onto Customer. Unknown plans/statuses are
  *  kept as-is (the engine validates them); missing id/name fails loudly. */
 export function mapAttCustomer(raw: Record<string, unknown>): Customer {
   const id = reqString(raw, String(raw.id ?? '?'), 'id', 'customerId', 'customer_id');
@@ -147,7 +147,7 @@ export class SeedDatasource implements Datasource {
   }
 }
 
-/** Live AT&T adapter. One GET per collection, Bearer auth, 10s timeout,
+/** Live carrier adapter. One GET per collection, Bearer auth, 10s timeout,
  *  one retry on network/5xx. Any failure — unreachable host, 401/403,
  *  bad JSON, unmappable record — throws DatasourceError. No fallback. */
 export class AttDatasource implements Datasource {
@@ -175,8 +175,8 @@ export class AttDatasource implements Datasource {
         if (!res.ok) {
           const detail = (await res.text()).slice(0, 300);
           // 4xx is a real client error (bad key, bad path) — do not retry.
-          if (res.status < 500) throw new DatasourceError(`AT&T API ${path} returned HTTP ${res.status}: ${detail}`, res.status);
-          throw new Error(`AT&T API ${path} returned HTTP ${res.status}: ${detail}`);
+          if (res.status < 500) throw new DatasourceError(`carrier API ${path} returned HTTP ${res.status}: ${detail}`, res.status);
+          throw new Error(`carrier API ${path} returned HTTP ${res.status}: ${detail}`);
         }
         return (await res.json()) as unknown;
       } catch (e) {
@@ -187,11 +187,11 @@ export class AttDatasource implements Datasource {
         clearTimeout(timer);
       }
     }
-    throw new DatasourceError(`AT&T API unreachable at ${this.baseUrl} after ${ATT_MAX_ATTEMPTS} attempts: ${lastError?.message ?? 'unknown error'}`);
+    throw new DatasourceError(`carrier API unreachable at ${this.baseUrl} after ${ATT_MAX_ATTEMPTS} attempts: ${lastError?.message ?? 'unknown error'}`);
   }
 
   private static asArray(value: unknown, path: string): Record<string, unknown>[] {
-    if (!Array.isArray(value)) throw new DatasourceError(`AT&T API ${path} did not return a JSON array`);
+    if (!Array.isArray(value)) throw new DatasourceError(`carrier API ${path} did not return a JSON array`);
     return value as Record<string, unknown>[];
   }
 

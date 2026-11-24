@@ -17,7 +17,7 @@ variables, never in code or git.
    | Variable | Value | Notes |
    |----------|-------|-------|
    | `GROQ_API_KEY` | key from console.groq.com | Optional. Live-LLM mode only. Without it the app is deterministic and says so. |
-   | `DATASOURCE` | `seed` | Keep `seed` until the AT&T API is connected. |
+   | `DATASOURCE` | `seed` | Keep `seed` until the carrier API is connected. |
    | `ATT_API_BASE_URL` | (fulfilment team) | Only when `DATASOURCE=att`. |
    | `ATT_API_KEY` | (fulfilment team) | Only when `DATASOURCE=att`. |
    | `AUTH_ENABLED` | `false` | Keep `false` until the Entra ID app exists. |
@@ -80,7 +80,7 @@ is live. Wiring the store is a fulfilment-team step (see §5).
 
 ## 4. Fulfilment-team onboarding — 3 steps
 
-These are the only three connections between this prototype and AT&T's
+These are the only three connections between this prototype and the carrier's
 real systems. Each is built, each fails honestly until connected, and each
 is visible in the Dashboard's Production readiness panel.
 
@@ -97,7 +97,7 @@ the browser, and **Reset to original dataset** restores the built-in
 seed. The sample is how the director decides whether steps 1–3 below
 are worth doing — it is not a shortcut past them.
 
-### Step 1 — Live AT&T data (`att` datasource mode)
+### Step 1 — Live carrier data (`att` datasource mode)
 
 1. The fulfilment team exposes five read endpoints on `ATT_API_BASE_URL`,
    each returning a JSON array (field names may be camelCase or snake_case —
@@ -116,7 +116,7 @@ are worth doing — it is not a shortcut past them.
 3. Set `DATASOURCE=att`, `ATT_API_BASE_URL`, `ATT_API_KEY` (Vercel env vars
    or `.env` for Docker) and redeploy / restart.
 4. Verify: `GET /datasource/status` — in `att` mode this really calls the
-   AT&T API and reports `reachable` with a customer count, or `unreachable`
+   carrier API and reports `reachable` with a customer count, or `unreachable`
    with the reason. The app never falls back to seed data in `att` mode:
    a failed load is a visible error, not a quiet fake.
 5. Records that cannot be mapped (missing `id`, missing `amount`, …) are
@@ -149,7 +149,7 @@ are worth doing — it is not a shortcut past them.
 
 ## 5. Auth wiring (Entra ID) — step 4, when login is required
 
-1. The fulfilment team registers the app in AT&T Entra ID (OAuth 2.0 /
+1. The fulfilment team registers the app in Entra ID (OAuth 2.0 /
    OpenID Connect) and provides the client id and issuer URL.
 2. Set `AUTH_ENABLED=true`, `AUTH_PROVIDER=entra-id`,
    `AUTH_CLIENT_ID=<client id>`, `AUTH_ISSUER_URL=<issuer>`, redeploy.
@@ -168,7 +168,7 @@ are worth doing — it is not a shortcut past them.
 |---|---|---|
 | `/api/health` returns the app HTML | SPA fallback swallowing `/api/*` | Check `vercel.json` still excludes `api/` from the rewrite. |
 | `llm_configured: true, llm_live: false` | Key set but no live call has succeeded (revoked key, Groq down, breaker open) | Check `llm_circuit`; verify the key in the Groq console; run a case with live LLM. |
-| `att` mode: data loads fail | AT&T API unreachable / 401 / bad payload | Read the error (`DatasourceError` names the endpoint and status); fix the connection — the app will not fall back to seed. |
+| `att` mode: data loads fail | carrier API unreachable / 401 / bad payload | Read the error (`DatasourceError` names the endpoint and status); fix the connection — the app will not fall back to seed. |
 | Release button says BLOCKED | Eval suite below the 85% gate (or never run) | Read the named failed checks; fix the state they depend on (e.g. restore POL-001) and re-run the suite. |
 | `docker compose up` fails on `web` | API not healthy yet | `web` waits for `api` health (`/health`); check `docker compose logs api`. |
 | Startup exits with "Configuration error" | A REQUIRED var is missing for the selected mode | Read the message — it names the missing vars. Demo mode (`seed`, auth off) needs none. |

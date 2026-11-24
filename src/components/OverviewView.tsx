@@ -44,7 +44,7 @@ export default function OverviewView() {
       <div className="panel">
         <h2>How a call works</h2>
         <ol className="ov-steps">
-          <li><span className="ov-num">1</span><span><strong>Find and confirm the customer.</strong> The operator searches by name, phone number, account number, email, or customer ID. The customer is then verified the way AT&amp;T verifies today: name and number first, then the 6-digit account PIN, or a one-time code sent to the registered phone or email — only after the customer confirms the registered email matches.</span></li>
+          <li><span className="ov-num">1</span><span><strong>Find and confirm the customer.</strong> The operator searches by name, phone number, account number, email, or customer ID. The customer is then verified the way a telecom carrier verifies today: name and number first, then the 6-digit account PIN, or a one-time code sent to the registered phone or email — only after the customer confirms the registered email matches.</span></li>
           <li><span className="ov-num">2</span><span><strong>Customer 360.</strong> Plan, balance, ledger, usage, and open cases — the same view the agent builds before it acts.</span></li>
           <li><span className="ov-num">3</span><span><strong>Grounding with STAIR.</strong> The agent looks up the answer in the policy documents themselves, structured as trees, and cites the exact section (for example, Billing Policy &gt; Credits &gt; Duplicate Charges §4.2). If the policy does not contain the answer, the agent says so and stops. No chunking, no embeddings, no vector database — by design.</span></li>
           <li><span className="ov-num">4</span><span><strong>Validate, propose, wait.</strong> The proposal is checked against the record, then a human approves or rejects it. Nothing is credited, activated, or changed until a person approves.</span></li>
@@ -74,14 +74,14 @@ export default function OverviewView() {
           <li><strong>Operator app</strong> — a web application: Dashboard, Data, Customers, Cases, System, and About Me. The System area holds pipelines, data layers, knowledge, evaluations, and observability.</li>
           <li><strong>Agent engine</strong> — the same rules in two forms: a deterministic engine in the app, and a Python reference backend (FastAPI-style, LangGraph-style state machine) in <code>server/</code>.</li>
           <li><strong>Live language model, optional</strong> — Groq is wired in, and when it is available it picks the policy section and drafts the summary. When it is not, the deterministic engine runs instead and says so. The human approval step gates everything either way.</li>
-          <li><strong>Data source switch</strong> — the app runs on a built-in dataset or an uploaded file today; pointing it at real AT&amp;T systems is a configuration change plus the fulfilment team&apos;s access, not a rebuild.</li>
+          <li><strong>Data source switch</strong> — the app runs on a built-in dataset or an uploaded file today; pointing it at real carrier systems is a configuration change plus the fulfilment team&apos;s access, not a rebuild.</li>
         </ul>
       </div>
 
       <div className="panel">
         <h2>Honest limits</h2>
         <ul className="ov-bullets">
-          <li>No real AT&amp;T internal system is connected. All data in the demo is synthetic, and the app says so.</li>
+          <li>No real carrier internal system is connected. All data in the demo is synthetic, and the app says so.</li>
           <li>The live language model is optional; without its key the agent is deterministic code.</li>
           <li>Sign-in is a demo gate; production sign-in is the company&apos;s identity system, which is not wired in yet.</li>
           <li>Scale at petabyte volume is architectural, not measured in this demo.</li>

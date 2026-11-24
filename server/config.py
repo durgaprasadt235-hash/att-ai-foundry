@@ -11,7 +11,7 @@ seed + deterministic engine):
   DATABASE_URL      optional — reserved for the future Postgres-backed
                     store. Nothing reads it yet.
   DATASOURCE        optional, default `seed` (`seed` | `att`).
-  AUTH_ENABLED      optional, default `false`. Production uses AT&T Entra ID.
+  AUTH_ENABLED      optional, default `false`. Production uses Entra ID.
   AUTH_PROVIDER / AUTH_CLIENT_ID / AUTH_ISSUER_URL
                     optional — required only when AUTH_ENABLED=true.
 

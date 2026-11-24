@@ -31,10 +31,10 @@ panel (which computes its rows from `/api/health` and live state).
 |---|---|---|---|
 | Per-tool contracts in code (input schema, timeout, retry-once, rate-limit note) | `src/lib/tool-contracts.ts`, `server/tool_contracts.py`, `GET /tools` | `pytest server/test_tool_contracts.py`; `curl localhost:8000/tools` | done |
 | Idempotency enforced on every mutating endpoint | `POST /cases/{id}/execute` (`server/app.py`): seen-key store + `credit_already_applied` check; frontend `approveRun` + `creditAlreadyApplied` | `pytest server/test_execute.py` (same key twice → `duplicate: true`, no second credit; already-posted credit → duplicate) | done |
-| Retries | Retry-once on transient failures only (tool contracts; Groq client; AT&T adapter; Medallion batch) | `pytest server/test_datasource.py::test_att_retries_once_on_500_then_succeeds`, `test_att_401_is_not_retried` | done |
+| Retries | Retry-once on transient failures only (tool contracts; Groq client; carrier adapter; Medallion batch) | `pytest server/test_datasource.py::test_att_retries_once_on_500_then_succeeds`, `test_att_401_is_not_retried` | done |
 | Rate limits | Demo-grade in-memory guard (`src/lib/api-utils.ts`, `server/app.py`), 429 + `Retry-After` | `pytest server/test_health.py::test_rate_limit_guard_trips_with_tiny_limit`; `curl` 429 path | done (demo-grade; production at the edge) |
 | Error handling | JSON `{ error, reason }` everywhere; 400/404/409/422/429/503 with reasons | `pytest server/test_health.py`, `server/test_execute.py::test_execute_invalid_plan_is_honest_409` | done |
-| Access controls | Auth boundary (`src/lib/auth.ts`, `server/auth.py`); AT&T adapter Bearer key; demo runs open on synthetic data with the gate off by default | `pytest server/test_auth.py`; `GET /health` → `auth` block | partial — the Entra ID callback is a placeholder (see §7 / DEPLOYMENT.md step 4) |
+| Access controls | Auth boundary (`src/lib/auth.ts`, `server/auth.py`); carrier adapter Bearer key; demo runs open on synthetic data with the gate off by default | `pytest server/test_auth.py`; `GET /health` → `auth` block | partial — the Entra ID callback is a placeholder (see §7 / DEPLOYMENT.md step 4) |
 
 ## 4. Evaluations
 
@@ -94,8 +94,8 @@ panel (which computes its rows from `/api/health` and live state).
 
 | JD line | Implemented in | How to verify | Status |
 |---|---|---|---|
-| Retries | Retry-once on transient failures (tool contracts, Groq, AT&T adapter, Medallion) | `pytest server/test_datasource.py`, `test_groq.py` | done |
-| Timeouts | Groq 20s, AT&T adapter 10s, deterministic tools 5s (tool contracts) | `GET /tools`; read the contracts | done |
+| Retries | Retry-once on transient failures (tool contracts, Groq, carrier adapter, Medallion) | `pytest server/test_datasource.py`, `test_groq.py` | done |
+| Timeouts | Groq 20s, carrier adapter 10s, deterministic tools 5s (tool contracts) | `GET /tools`; read the contracts | done |
 | Circuit breaker | `src/lib/groq.ts`, `server/groq_client.py`: opens after 3 consecutive failures, 60s cooldown, half-open trial; reported as `llm_circuit` in `/health` | `pytest server/test_groq.py::test_circuit_breaker_opens_after_three_failures`, `test_circuit_breaker_half_open_trial_success_closes_it`; node check of the TS breaker | done |
 | Backpressure (bounded batch sizes) | `MEDALLION_BATCH_LIMIT = 1000` (`src/lib/medallion.ts`, `server/medallion.py`); deferred records reported, never dropped | `pytest server/test_medallion.py::test_incremental_batch_is_bounded_and_defers_the_rest`; System → Medallion batch panel | done |
 | Graceful degradation (deterministic fallback everywhere, UI says which mode) | Deterministic engine is the default and the fallback; every run trace + the header say which mode was used | Create a case with no key → trace says "deterministic fallback" / "off"; run with a key → "groq" | done |
@@ -116,7 +116,7 @@ panel (which computes its rows from `/api/health` and live state).
 
 ## Honest limits (what is still NOT done)
 
-- **No real AT&T APIs, no real customer data.** The `att` datasource mode is
+- **No real carrier APIs, no real customer data.** The `att` datasource mode is
   built and fails honestly until the fulfilment team connects it
   (`docs/DEPLOYMENT.md` §4 step 1). The demo runs on synthetic seed data.
 - **No real Entra ID auth.** The gate, the "not configured" state, and the
