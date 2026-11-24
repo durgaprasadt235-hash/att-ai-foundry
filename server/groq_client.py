@@ -1,4 +1,4 @@
-"""Live Groq client for the AT&T AI Foundry agent (server/groq_client.py).
+"""Live Groq client for the Telecom Project agent (server/groq_client.py).
 
 Calls Groq's OpenAI-compatible API at https://api.groq.com/openai/v1 with
 model openai/gpt-oss-120b. No new dependencies: plain urllib, like the rest

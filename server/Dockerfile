@@ -1,4 +1,4 @@
-# FastAPI reference backend — AT&T AI Foundry.
+# FastAPI reference backend — Telecom Project.
 # Build: docker build -t att-ai-foundry-api ./server
 # Run:   docker run -p 8000:8000 --env-file .env att-ai-foundry-api
 # Or one command for the whole stack: docker compose up (see docker-compose.yml).

@@ -1,4 +1,4 @@
-# AT&T AI Foundry — whole stack in one command.
+# Telecom Project — whole stack in one command.
 #   docker compose up            # API on :8000, web on :4173
 #   docker compose --profile with-db up   # also starts Postgres (reserved)
 #

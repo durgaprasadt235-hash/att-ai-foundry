@@ -1,4 +1,4 @@
-# AT&T AI Foundry — Enterprise Customer & Operational Data Platform
+# Telecom Project — Enterprise Customer & Operational Data Platform
 
 Director-grade working prototype for **AJ DiLeo, AI Director @ AT&T, AI Foundry**.
 Built by Durga Prasad Thoorpati (Sr. Software Engineer) from the AT&T project:
@@ -418,7 +418,7 @@ Full runbook: `docs/DEPLOYMENT.md` (Vercel import, env vars, redeploy,
 smoke checks: `/api/health`, CASE-1001 run, Medallion counts).
 
 ```bash
-git init && git add . && git commit -m "AT&T AI Foundry prototype"
+git init && git add . && git commit -m "Telecom Project prototype"
 # Create the repo on GitHub (user: durgaprasadt235-hash), push, then import in Vercel.
 # vercel.json: SPA fallback excludes /api/* — the fallback cannot swallow API routes.
 # After import, set GROQ_API_KEY as a Vercel project environment variable

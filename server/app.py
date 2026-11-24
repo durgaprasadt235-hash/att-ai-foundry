@@ -1,4 +1,4 @@
-"""FastAPI reference backend — AT&T AI Foundry demo.
+"""FastAPI reference backend — Telecom Project demo.
 
 Runs the same deterministic engine as the TypeScript frontend
 (server/engine.py mirrors src/lib/engine.ts). Endpoints are stateless
@@ -59,7 +59,7 @@ from stair_retriever import (
 )
 from tool_contracts import TOOL_CONTRACTS
 
-app = FastAPI(title="AT&T AI Foundry — reference backend", version="1.0.0")
+app = FastAPI(title="Telecom Project — reference backend", version="1.0.0")
 
 # --- Startup config: fail loudly when a REQUIRED var is missing for the
 # selected mode (e.g. DATASOURCE=att without ATT_API_BASE_URL/ATT_API_KEY).

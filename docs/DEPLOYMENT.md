@@ -1,4 +1,4 @@
-# Deployment runbook — AT&T AI Foundry
+# Deployment runbook — Telecom Project
 
 How to deploy the prototype, connect it, and prove it works. Nothing here
 requires a secret to be written down: keys are set as environment

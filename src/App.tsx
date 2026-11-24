@@ -351,7 +351,7 @@ export default function App() {
     if (!auth.configured) {
       return (
         <div>
-          <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform</span></div></div></header>
+          <header className="top"><div className="top-inner"><div><span className="brand">Telecom <span>Project</span></span><span className="badge">Enterprise Data Platform</span></div></div></header>
           <div className="wrap">
             <div className="panel highlight mt">
               <h1>Sign-in is not available</h1>
@@ -364,7 +364,7 @@ export default function App() {
     }
     return (
       <div>
-        <header className="top"><div className="top-inner"><div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform</span></div></div></header>
+        <header className="top"><div className="top-inner"><div><span className="brand">Telecom <span>Project</span></span><span className="badge">Enterprise Data Platform</span></div></div></header>
         <div className="wrap">
           <div className="panel highlight mt">
             <h1>Sign in with {auth.provider}</h1>
@@ -400,7 +400,7 @@ export default function App() {
     <div>
       <header className="top">
         <div className="top-inner">
-          <div><span className="brand">AT&amp;T <span>AI Foundry</span></span><span className="badge">Enterprise Data Platform</span></div>
+          <div><span className="brand">Telecom <span>Project</span></span><span className="badge">Enterprise Data Platform</span></div>
           <div className="small muted">{apiStatus}</div>
         </div>
       </header>

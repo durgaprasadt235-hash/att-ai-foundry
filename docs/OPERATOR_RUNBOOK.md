@@ -1,4 +1,4 @@
-# Operator Runbook — AT&T AI Foundry Medallion Platform
+# Operator Runbook — Telecom Project Medallion Platform
 
 One person runs this whole platform. No 5–6 person engineer team. When
 something fails, the failure card tells you what broke, where, and what to

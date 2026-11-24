@@ -1,6 +1,6 @@
-# AT&T AI Foundry — Product Requirements Document (PRD)
+# Telecom Project — Product Requirements Document (PRD)
 
-**Product:** AT&T AI Foundry — Enterprise Task-Execution Agent Platform (prototype)
+**Product:** Telecom Project — Enterprise Task-Execution Agent Platform (prototype)
 **Version:** 1.0 — 2026-11-21
 **Author:** Durga Prasad Thoorpati
 **Audience:** AJ DiLeo, AI Director @ AT&T, AI Foundry; the AI Foundry fulfilment team

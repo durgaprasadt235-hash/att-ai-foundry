@@ -1,4 +1,4 @@
-# AT&T AI Foundry — High-Level Overview
+# Telecom Project — High-Level Overview
 
 ## About Me
 
